@@ -15,6 +15,7 @@ import {
   Menu,
   ChevronDown,
   FolderOpen,
+  Github,
 } from "lucide-react";
 import { EditorFont, EditorTheme } from "../types";
 import { PWAInstallButton } from "./PWAInstallButton";
@@ -36,6 +37,9 @@ interface HeaderProps {
   setTheme: (theme: EditorTheme) => void;
   onToggleSidebar: () => void;
   isSidebarOpen: boolean;
+  isGistConfigured?: boolean;
+  isGistSyncing?: boolean;
+  lastGistSyncedAt?: number | null;
 }
 
 export const Header: React.FC<HeaderProps> = ({
@@ -55,6 +59,9 @@ export const Header: React.FC<HeaderProps> = ({
   setTheme,
   onToggleSidebar,
   isSidebarOpen,
+  isGistConfigured = false,
+  isGistSyncing = false,
+  lastGistSyncedAt = null,
 }) => {
   const [showThemeMenu, setShowThemeMenu] = React.useState(false);
   const [showFontMenu, setShowFontMenu] = React.useState(false);
@@ -124,15 +131,22 @@ export const Header: React.FC<HeaderProps> = ({
 
       {/* Center: Cloud Auto-Save & Multi-Device Sync Pill */}
       <div className="flex items-center gap-2">
-        {/* Cloud Auto-Save Status */}
+        {/* Cloud Auto-Save / GitHub Gist Status */}
         <button
           id="cloud-save-status-badge"
           type="button"
           onClick={onForceSync}
           className="hidden md:flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium bg-neutral-100 dark:bg-neutral-800 hover:bg-neutral-200 dark:hover:bg-neutral-700 text-neutral-600 dark:text-neutral-300 border border-neutral-200/60 dark:border-neutral-700/60 transition-colors cursor-pointer"
-          title="Clique para sincronizar agora ou reconectar"
+          title={isGistConfigured ? "Sincronizado com o seu GitHub Gist" : "Clique para sincronizar agora ou reconectar"}
         >
-          {syncState === "saving" ? (
+          {isGistConfigured ? (
+            <>
+              <Github className={`w-3.5 h-3.5 ${isGistSyncing ? "animate-spin text-blue-500" : "text-emerald-500"}`} />
+              <span className="text-[11px] text-neutral-700 dark:text-neutral-200">
+                {isGistSyncing ? "Salvando no GitHub..." : `GitHub: ${formatSavedTime(lastGistSyncedAt || lastSavedAt)}`}
+              </span>
+            </>
+          ) : syncState === "saving" ? (
             <>
               <Cloud className="w-3.5 h-3.5 text-amber-500 animate-bounce" />
               <span className="text-[11px] text-amber-600 dark:text-amber-400">Salvando na nuvem...</span>
@@ -157,20 +171,35 @@ export const Header: React.FC<HeaderProps> = ({
           )}
         </button>
 
-        {/* Live Multi-Device Sync Pill */}
+        {/* Live Multi-Device Sync / GitHub Sync Pill */}
         <button
           id="open-sync-device-btn"
           type="button"
           onClick={onOpenSyncModal}
-          className="flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-300 border border-emerald-200/80 dark:border-emerald-800/80 hover:bg-emerald-100 dark:hover:bg-emerald-900/40 transition-colors shadow-2xs"
+          className={`flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium transition-colors shadow-2xs ${
+            isGistConfigured
+              ? "bg-neutral-900 text-white dark:bg-white dark:text-neutral-900 hover:bg-neutral-800 dark:hover:bg-neutral-100"
+              : "bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-300 border border-emerald-200/80 dark:border-emerald-800/80 hover:bg-emerald-100 dark:hover:bg-emerald-900/40"
+          }`}
           title="Clique para gerenciar e conectar celulares e outros dispositivos"
         >
-          <Radio className="w-3.5 h-3.5 text-emerald-600 dark:text-emerald-400 animate-pulse" />
-          <span className="text-[11px] font-semibold whitespace-nowrap">
-            {connectedDevicesCount > 1
-              ? `${connectedDevicesCount} Aparelhos`
-              : "Sincronizar Celular"}
-          </span>
+          {isGistConfigured ? (
+            <>
+              <Github className="w-3.5 h-3.5 text-emerald-400 dark:text-emerald-600" />
+              <span className="text-[11px] font-semibold whitespace-nowrap">
+                GitHub Sincronizado
+              </span>
+            </>
+          ) : (
+            <>
+              <Radio className="w-3.5 h-3.5 text-emerald-600 dark:text-emerald-400 animate-pulse" />
+              <span className="text-[11px] font-semibold whitespace-nowrap">
+                {connectedDevicesCount > 1
+                  ? `${connectedDevicesCount} Aparelhos`
+                  : "Sincronizar Celular"}
+              </span>
+            </>
+          )}
         </button>
       </div>
 

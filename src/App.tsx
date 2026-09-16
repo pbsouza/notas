@@ -1,5 +1,6 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useCallback } from "react";
 import { useRealtimeSync } from "./hooks/useRealtimeSync";
+import { useGitHubSync } from "./hooks/useGitHubSync";
 import { Header } from "./components/Header";
 import { Sidebar } from "./components/Sidebar";
 import { RichEditor } from "./components/RichEditor";
@@ -33,7 +34,13 @@ export default function App() {
     deviceName,
     setDeviceName,
     deviceId,
+    serverUrl,
+    setServerUrl,
+    isStaticHost,
+    replaceOrMergeNotes,
   } = useRealtimeSync();
+
+  const githubSync = useGitHubSync(notes, replaceOrMergeNotes);
 
   const [font, setFont] = useState<EditorFont>(() => {
     return (localStorage.getItem("bloco_font") as EditorFont) || "sans";
@@ -205,7 +212,13 @@ export default function App() {
         onOpenExport={() => setIsExportModalOpen(true)}
         onOpenSyncModal={() => setIsSyncModalOpen(true)}
         onToggleFind={() => setIsFindBarOpen((prev) => !prev)}
-        onForceSync={forceSync}
+        onForceSync={() => {
+          if (githubSync.isConfigured) {
+            githubSync.syncNow(notes, replaceOrMergeNotes);
+          } else {
+            forceSync();
+          }
+        }}
         isFindOpen={isFindBarOpen}
         syncState={syncState}
         lastSavedAt={lastSavedAt}
@@ -216,6 +229,9 @@ export default function App() {
         setTheme={setTheme}
         onToggleSidebar={() => setIsSidebarOpen((prev) => !prev)}
         isSidebarOpen={isSidebarOpen}
+        isGistConfigured={githubSync.isConfigured}
+        isGistSyncing={githubSync.isSyncing}
+        lastGistSyncedAt={githubSync.lastSyncedAt}
       />
 
       {/* Find and Replace Bar */}
@@ -286,6 +302,12 @@ export default function App() {
         deviceId={deviceId}
         deviceName={deviceName}
         setDeviceName={setDeviceName}
+        serverUrl={serverUrl}
+        setServerUrl={setServerUrl}
+        isStaticHost={isStaticHost}
+        githubSync={githubSync}
+        notes={notes}
+        onNotesMerged={replaceOrMergeNotes}
       />
 
       {/* Global Drag-and-Drop Overlay Indicator */}

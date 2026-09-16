@@ -172,6 +172,10 @@ export interface UseRealtimeSyncReturn {
   setDeviceName: (name: string) => void;
   deviceId: string;
   deviceColor: string;
+  serverUrl: string;
+  setServerUrl: (url: string) => void;
+  isStaticHost: boolean;
+  replaceOrMergeNotes: (incomingNotes: Note[]) => void;
 }
 
 export function useRealtimeSync(initialRoomId?: string): UseRealtimeSyncReturn {
@@ -223,6 +227,47 @@ export function useRealtimeSync(initialRoomId?: string): UseRealtimeSyncReturn {
   const connectWsRef = useRef<(() => void) | null>(null);
   const bcRef = useRef<BroadcastChannel | null>(null);
 
+  const isStaticHost = typeof window !== "undefined" && window.location.hostname.endsWith("github.io");
+  const [serverUrl, setServerUrlState] = useState<string>(() => {
+    return localStorage.getItem("bloco_server_url") || "";
+  });
+
+  const setServerUrl = useCallback((url: string) => {
+    const clean = url.trim().replace(/\/+$/, "");
+    setServerUrlState(clean);
+    if (clean) {
+      localStorage.setItem("bloco_server_url", clean);
+    } else {
+      localStorage.removeItem("bloco_server_url");
+    }
+  }, []);
+
+  const getApiBase = useCallback((): string | null => {
+    if (serverUrl) {
+      return serverUrl.trim().replace(/\/+$/, "");
+    }
+    // GitHub Pages is static: no relative /api/ backend exists
+    if (isStaticHost) {
+      return null;
+    }
+    return "";
+  }, [serverUrl, isStaticHost]);
+
+  const getWsUrl = useCallback((): string | null => {
+    if (serverUrl) {
+      const clean = serverUrl.trim().replace(/\/+$/, "");
+      const wsProto = clean.startsWith("https") ? "wss:" : "ws:";
+      const cleanHost = clean.replace(/^https?:\/\//, "");
+      return `${wsProto}//${cleanHost}/ws`;
+    }
+    // GitHub Pages is static: no WebSocket server exists on github.io
+    if (isStaticHost) {
+      return null;
+    }
+    const protocol = window.location.protocol === "https:" ? "wss:" : "ws:";
+    return `${protocol}//${window.location.host}/ws`;
+  }, [serverUrl, isStaticHost]);
+
   const setDeviceName = useCallback((name: string) => {
     setDeviceNameState(name);
     localStorage.setItem("bloco_device_name", name);
@@ -261,8 +306,15 @@ export function useRealtimeSync(initialRoomId?: string): UseRealtimeSyncReturn {
   // Fetch from REST API (initial load + polling fallback)
   const fetchNotesRest = useCallback(
     async (rId: string) => {
+      const apiBase = getApiBase();
+      if (apiBase === null) {
+        // Static host (e.g. GitHub Pages) without custom server: safe offline-first mode
+        setSyncState("synced");
+        return;
+      }
+
       try {
-        const res = await fetch(`/api/rooms/${rId}/notes`);
+        const res = await fetch(`${apiBase}/api/rooms/${rId}/notes`);
         if (res.ok) {
           const data = await res.json();
           if (Array.isArray(data.notes)) {
@@ -292,7 +344,7 @@ export function useRealtimeSync(initialRoomId?: string): UseRealtimeSyncReturn {
         }
       }
     },
-    [setActiveNoteId]
+    [setActiveNoteId, getApiBase]
   );
 
   // Instant local multi-tab / multi-screen sync via BroadcastChannel
@@ -375,14 +427,19 @@ export function useRealtimeSync(initialRoomId?: string): UseRealtimeSyncReturn {
   // Initialize and handle WebSocket
   useEffect(() => {
     let isMounted = true;
+    const wsTarget = getWsUrl();
+
+    if (!wsTarget) {
+      // GitHub Pages or static host without backend: local notes are synced & offline-first
+      setIsConnected(false);
+      setSyncState("synced");
+      return;
+    }
+
     setSyncState("connecting");
 
     // Immediate initial load
     fetchNotesRest(roomId);
-
-    // Build WebSocket URL
-    const protocol = window.location.protocol === "https:" ? "wss:" : "ws:";
-    const wsUrl = `${protocol}//${window.location.host}/ws`;
 
     let reconnectTimer: NodeJS.Timeout | null = null;
     let pingInterval: NodeJS.Timeout | null = null;
@@ -391,7 +448,7 @@ export function useRealtimeSync(initialRoomId?: string): UseRealtimeSyncReturn {
       if (!isMounted) return;
 
       try {
-        const ws = new WebSocket(wsUrl);
+        const ws = new WebSocket(wsTarget!);
         wsRef.current = ws;
 
         ws.onopen = () => {
@@ -611,8 +668,15 @@ export function useRealtimeSync(initialRoomId?: string): UseRealtimeSyncReturn {
           wsRef.current.send(JSON.stringify(updateMsg));
         }
 
+        const apiBase = getApiBase();
+        if (apiBase === null) {
+          setSyncState("synced");
+          setLastSavedAt(Date.now());
+          return;
+        }
+
         // REST fallback persist with device ID header
-        fetch(`/api/rooms/${roomId}/notes`, {
+        fetch(`${apiBase}/api/rooms/${roomId}/notes`, {
           method: "POST",
           headers: {
             "Content-Type": "application/json",
@@ -717,28 +781,34 @@ export function useRealtimeSync(initialRoomId?: string): UseRealtimeSyncReturn {
     }
 
     // Persist via REST
-    fetch(`/api/rooms/${roomId}/notes`, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        "x-device-id": deviceId,
-      },
-      body: JSON.stringify(newNote),
-    })
-      .then((res) => {
-        if (res.ok) {
-          setSyncState("synced");
-          setLastSavedAt(Date.now());
-        }
+    const apiBase = getApiBase();
+    if (apiBase !== null) {
+      fetch(`${apiBase}/api/rooms/${roomId}/notes`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "x-device-id": deviceId,
+        },
+        body: JSON.stringify(newNote),
       })
-      .catch(() => {
-        if (!wsRef.current || wsRef.current.readyState !== WebSocket.OPEN) {
-          setSyncState("offline");
-        }
-      });
+        .then((res) => {
+          if (res.ok) {
+            setSyncState("synced");
+            setLastSavedAt(Date.now());
+          }
+        })
+        .catch(() => {
+          if (!wsRef.current || wsRef.current.readyState !== WebSocket.OPEN) {
+            setSyncState("offline");
+          }
+        });
+    } else {
+      setSyncState("synced");
+      setLastSavedAt(Date.now());
+    }
 
     return newNote;
-  }, [roomId, deviceId, deviceName, setActiveNoteId]);
+  }, [roomId, deviceId, deviceName, setActiveNoteId, getApiBase]);
 
   // Delete note
   const deleteNote = useCallback(
@@ -780,12 +850,15 @@ export function useRealtimeSync(initialRoomId?: string): UseRealtimeSyncReturn {
       }
 
       // Call REST
-      fetch(`/api/rooms/${roomId}/notes/${id}`, {
-        method: "DELETE",
-        headers: { "x-device-id": deviceId },
-      }).catch(() => {});
+      const apiBase = getApiBase();
+      if (apiBase !== null) {
+        fetch(`${apiBase}/api/rooms/${roomId}/notes/${id}`, {
+          method: "DELETE",
+          headers: { "x-device-id": deviceId },
+        }).catch(() => {});
+      }
     },
-    [roomId, deviceId, setActiveNoteId]
+    [roomId, deviceId, setActiveNoteId, getApiBase]
   );
 
   // Duplicate note
@@ -833,16 +906,19 @@ export function useRealtimeSync(initialRoomId?: string): UseRealtimeSyncReturn {
         );
       }
 
-      fetch(`/api/rooms/${roomId}/notes`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          "x-device-id": deviceId,
-        },
-        body: JSON.stringify(cloned),
-      }).catch(() => {});
+      const apiBase = getApiBase();
+      if (apiBase !== null) {
+        fetch(`${apiBase}/api/rooms/${roomId}/notes`, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            "x-device-id": deviceId,
+          },
+          body: JSON.stringify(cloned),
+        }).catch(() => {});
+      }
     },
-    [roomId, deviceId, deviceName, setActiveNoteId]
+    [roomId, deviceId, deviceName, setActiveNoteId, getApiBase]
   );
 
   // Force sync / manual refresh
@@ -853,6 +929,28 @@ export function useRealtimeSync(initialRoomId?: string): UseRealtimeSyncReturn {
       connectWsRef.current?.();
     }
   }, [roomId, fetchNotesRest]);
+
+  const replaceOrMergeNotes = useCallback(
+    (incomingNotes: Note[]) => {
+      if (!Array.isArray(incomingNotes) || incomingNotes.length === 0) return;
+      setNotes((prevNotes) => {
+        const map = new Map<string, Note>();
+        prevNotes.forEach((n) => map.set(n.id, n));
+        incomingNotes.forEach((inNote) => {
+          if (!inNote || !inNote.id) return;
+          const existing = map.get(inNote.id);
+          if (!existing || (inNote.updatedAt || 0) > (existing.updatedAt || 0)) {
+            map.set(inNote.id, inNote);
+          }
+        });
+        const merged = Array.from(map.values()).sort((a, b) => (b.updatedAt || 0) - (a.updatedAt || 0));
+        saveLocalNotes(roomId, merged);
+        setLastSavedAt(Date.now());
+        return merged;
+      });
+    },
+    [roomId]
+  );
 
   return {
     notes,
@@ -876,5 +974,9 @@ export function useRealtimeSync(initialRoomId?: string): UseRealtimeSyncReturn {
     setDeviceName,
     deviceId,
     deviceColor,
+    serverUrl,
+    setServerUrl,
+    isStaticHost,
+    replaceOrMergeNotes,
   };
 }
