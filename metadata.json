@@ -1,0 +1,6 @@
+{
+  "name": "Bloco de Notas Nuvem",
+  "description": "Bloco de notas com salvamento automático na nuvem, sincronização em tempo real entre dispositivos e exportação em PDF, TXT, DOC, DOCX, BAT, HTML e outros formatos.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

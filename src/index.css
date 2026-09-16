@@ -1,0 +1,196 @@
+@import "tailwindcss";
+
+@layer base {
+  body {
+    font-family: 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  }
+
+  /* Custom subtle scrollbar for modern editor feel */
+  ::-webkit-scrollbar {
+    width: 6px;
+    height: 6px;
+  }
+  ::-webkit-scrollbar-track {
+    background: transparent;
+  }
+  ::-webkit-scrollbar-thumb {
+    background: rgba(150, 150, 150, 0.25);
+    border-radius: 4px;
+  }
+  ::-webkit-scrollbar-thumb:hover {
+    background: rgba(150, 150, 150, 0.45);
+  }
+}
+
+/* Modern Document & DOCX Content Styling */
+.document-content {
+  line-height: 1.7;
+  word-wrap: break-word;
+  overflow-wrap: break-word;
+}
+
+.document-content p {
+  margin-bottom: 0.85rem;
+}
+
+.document-content p:last-child {
+  margin-bottom: 0;
+}
+
+/* DOCX & Modern Editor Headings */
+.document-content h1,
+.document-content .docx-doc-title {
+  font-size: 1.85rem;
+  font-weight: 700;
+  line-height: 1.25;
+  margin-top: 1.5rem;
+  margin-bottom: 0.75rem;
+  letter-spacing: -0.02em;
+}
+
+.document-content h2,
+.document-content .docx-doc-subtitle {
+  font-size: 1.45rem;
+  font-weight: 600;
+  line-height: 1.3;
+  margin-top: 1.35rem;
+  margin-bottom: 0.6rem;
+  letter-spacing: -0.015em;
+}
+
+.document-content h3 {
+  font-size: 1.2rem;
+  font-weight: 600;
+  line-height: 1.35;
+  margin-top: 1.15rem;
+  margin-bottom: 0.5rem;
+}
+
+.document-content h4 {
+  font-size: 1.05rem;
+  font-weight: 600;
+  margin-top: 1rem;
+  margin-bottom: 0.4rem;
+}
+
+/* Lists */
+.document-content ul {
+  list-style-type: disc;
+  padding-left: 1.75rem;
+  margin-top: 0.5rem;
+  margin-bottom: 0.85rem;
+}
+
+.document-content ol {
+  list-style-type: decimal;
+  padding-left: 1.75rem;
+  margin-top: 0.5rem;
+  margin-bottom: 0.85rem;
+}
+
+.document-content li {
+  margin-bottom: 0.35rem;
+}
+
+/* Blockquotes */
+.document-content blockquote {
+  border-left: 4px solid #3b82f6;
+  padding-left: 1rem;
+  padding-top: 0.25rem;
+  padding-bottom: 0.25rem;
+  margin: 1rem 0;
+  font-style: italic;
+  opacity: 0.9;
+  border-radius: 0 4px 4px 0;
+}
+
+/* Code */
+.document-content code {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  font-size: 0.875em;
+  padding: 0.15rem 0.35rem;
+  border-radius: 4px;
+  background-color: rgba(125, 125, 125, 0.12);
+}
+
+.document-content pre {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  font-size: 0.85rem;
+  padding: 0.85rem 1rem;
+  border-radius: 8px;
+  background-color: rgba(125, 125, 125, 0.1);
+  overflow-x: auto;
+  margin: 0.85rem 0;
+}
+
+/* Horizontal Rule */
+.document-content hr {
+  border: none;
+  border-top: 1px solid rgba(150, 150, 150, 0.25);
+  margin: 1.5rem 0;
+}
+
+/* DOCX & Editor Tables (Fix for unconfigured/ugly tables) */
+.document-content table,
+.document-content .docx-table {
+  border-collapse: collapse;
+  width: 100%;
+  margin: 1.25rem 0;
+  border: 1px solid rgba(150, 150, 150, 0.3);
+  border-radius: 6px;
+  overflow: hidden;
+}
+
+.document-content th {
+  border: 1px solid rgba(150, 150, 150, 0.25);
+  padding: 8px 12px;
+  text-align: left;
+  font-weight: 600;
+  background-color: rgba(150, 150, 150, 0.08);
+}
+
+.document-content td {
+  border: 1px solid rgba(150, 150, 150, 0.2);
+  padding: 8px 12px;
+  text-align: left;
+  vertical-align: top;
+}
+
+.document-content tr:nth-child(even) td {
+  background-color: rgba(150, 150, 150, 0.03);
+}
+
+/* DOCX Embedded Images & Editor Media */
+.document-content img,
+.document-content .docx-embedded-img {
+  max-width: 100%;
+  height: auto;
+  border-radius: 8px;
+  margin: 1rem auto;
+  display: block;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+}
+
+/* Links */
+.document-content a {
+  color: #2563eb;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+.document-content a:hover {
+  color: #1d4ed8;
+}
+
+/* Interactive Checklist items in editor */
+.document-content .checklist-item {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.5rem;
+  margin: 0.35rem 0;
+}
+
+.document-content .checklist-checkbox {
+  margin-top: 0.25rem;
+  cursor: pointer;
+}
