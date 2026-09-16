@@ -20,9 +20,11 @@ export default function App() {
     setRoomId,
     setActiveNoteId,
     updateActiveNote,
+    updateNoteById,
     createNote,
     deleteNote,
     duplicateNote,
+    forceSync,
     devices,
     isConnected,
     syncState,
@@ -165,7 +167,7 @@ export default function App() {
   const handleTogglePin = (id: string) => {
     const target = notes.find((n) => n.id === id);
     if (target) {
-      updateActiveNote({ pinned: !target.pinned });
+      updateNoteById(id, { pinned: !target.pinned });
     }
   };
 
@@ -203,6 +205,7 @@ export default function App() {
         onOpenExport={() => setIsExportModalOpen(true)}
         onOpenSyncModal={() => setIsSyncModalOpen(true)}
         onToggleFind={() => setIsFindBarOpen((prev) => !prev)}
+        onForceSync={forceSync}
         isFindOpen={isFindBarOpen}
         syncState={syncState}
         lastSavedAt={lastSavedAt}

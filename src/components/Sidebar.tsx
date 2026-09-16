@@ -494,7 +494,41 @@ export const Sidebar: React.FC<SidebarProps> = ({
         <div className="flex-1 overflow-y-auto p-3 space-y-3">
           {filteredAndSortedNotes.length === 0 ? (
             <div className="p-6 text-center text-xs text-neutral-400">
-              Nenhuma anotação corresponde aos critérios de busca.
+              {notes.length === 0 ? (
+                <div className="space-y-2">
+                  <p>Nenhuma anotação criada ainda.</p>
+                  <button
+                    id="sidebar-create-first-note"
+                    type="button"
+                    onClick={onCreateNote}
+                    className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-blue-50 dark:bg-blue-950/60 text-blue-600 dark:text-blue-400 hover:bg-blue-100 dark:hover:bg-blue-900/60 rounded-lg font-medium transition-colors cursor-pointer"
+                  >
+                    <Plus className="w-3.5 h-3.5" />
+                    <span>Criar nova anotação</span>
+                  </button>
+                </div>
+              ) : (
+                <div className="space-y-1">
+                  <p>Nenhuma anotação corresponde aos critérios de busca.</p>
+                  <button
+                    type="button"
+                    onClick={() =>
+                      setFilters({
+                        query: "",
+                        dateField: "all",
+                        dateRange: "all",
+                        startDate: "",
+                        endDate: "",
+                        pinnedOnly: false,
+                        sortBy: "updated-desc",
+                      })
+                    }
+                    className="text-blue-600 dark:text-blue-400 underline hover:no-underline cursor-pointer"
+                  >
+                    Limpar filtros
+                  </button>
+                </div>
+              )}
             </div>
           ) : (
             <>

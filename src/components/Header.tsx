@@ -25,6 +25,7 @@ interface HeaderProps {
   onOpenExport: () => void;
   onOpenSyncModal: () => void;
   onToggleFind: () => void;
+  onForceSync?: () => void;
   isFindOpen: boolean;
   syncState: "synced" | "saving" | "offline" | "connecting";
   lastSavedAt: number | null;
@@ -43,6 +44,7 @@ export const Header: React.FC<HeaderProps> = ({
   onOpenExport,
   onOpenSyncModal,
   onToggleFind,
+  onForceSync,
   isFindOpen,
   syncState,
   lastSavedAt,
@@ -123,9 +125,12 @@ export const Header: React.FC<HeaderProps> = ({
       {/* Center: Cloud Auto-Save & Multi-Device Sync Pill */}
       <div className="flex items-center gap-2">
         {/* Cloud Auto-Save Status */}
-        <div
+        <button
           id="cloud-save-status-badge"
-          className="hidden md:flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium bg-neutral-100 dark:bg-neutral-800 text-neutral-600 dark:text-neutral-300 border border-neutral-200/60 dark:border-neutral-700/60"
+          type="button"
+          onClick={onForceSync}
+          className="hidden md:flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium bg-neutral-100 dark:bg-neutral-800 hover:bg-neutral-200 dark:hover:bg-neutral-700 text-neutral-600 dark:text-neutral-300 border border-neutral-200/60 dark:border-neutral-700/60 transition-colors cursor-pointer"
+          title="Clique para sincronizar agora ou reconectar"
         >
           {syncState === "saving" ? (
             <>
@@ -150,7 +155,7 @@ export const Header: React.FC<HeaderProps> = ({
               <span className="text-[11px] text-blue-500">Conectando à nuvem...</span>
             </>
           )}
-        </div>
+        </button>
 
         {/* Live Multi-Device Sync Pill */}
         <button

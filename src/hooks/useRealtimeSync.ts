@@ -36,6 +36,111 @@ const DEVICE_COLORS = [
   "#0d9488", // teal
 ];
 
+export const DEFAULT_WELCOME_NOTE: Note = {
+  id: "welcome-note",
+  title: "Bem-vindo ao Bloco de Notas Nuvem",
+  content: `Bem-vindo ao seu Bloco de Notas com Sincronização em Tempo Real e Nuvem! 🚀
+
+Recursos principais:
+• ☁️ Salvamento automático contínuo na nuvem e no dispositivo (offline-first)
+• 🔄 Sincronização em tempo real entre celulares, tablets e computadores
+• 💾 Exportação em múltiplos formatos: PDF, DOC, DOCX, TXT, TFT, BAT, HTML, MD, JSON, etc.
+• 📱 Conexão instantânea por Código de Sala ou QR Code
+• 🎨 Fontes ajustáveis (Mono, Sans, Serif) e temas personalizáveis
+• 🔍 Ferramenta de Localizar e Substituir (Ctrl+F)
+• 📋 Contagem ao vivo de palavras, caracteres, linhas e tempo de leitura
+
+Para testar a sincronização em tempo real:
+1. Abra esta mesma página em outro aparelho (celular/tablet) ou outra aba.
+2. Digite aqui e veja o texto se atualizar instantaneamente!`,
+  tags: ["Boas-vindas", "Tutorial"],
+  pinned: true,
+  createdAt: 1726000000000,
+  updatedAt: 1726000000000,
+  version: 1,
+};
+
+function loadLocalNotes(rId: string): Note[] {
+  try {
+    const raw = localStorage.getItem(`bloco_notes_${rId}`);
+    if (raw) {
+      const parsed = JSON.parse(raw);
+      if (Array.isArray(parsed) && parsed.length > 0) {
+        return parsed;
+      }
+    }
+    const backupRaw = localStorage.getItem("bloco_notes_backup");
+    if (backupRaw) {
+      const backupParsed = JSON.parse(backupRaw);
+      if (Array.isArray(backupParsed) && backupParsed.length > 0) {
+        return backupParsed;
+      }
+    }
+  } catch (err) {
+    console.warn("Error reading local notes:", err);
+  }
+  return [DEFAULT_WELCOME_NOTE];
+}
+
+function saveLocalNotes(rId: string, notesList: Note[]) {
+  try {
+    localStorage.setItem(`bloco_notes_${rId}`, JSON.stringify(notesList));
+    localStorage.setItem("bloco_notes_backup", JSON.stringify(notesList));
+    localStorage.setItem(`bloco_notes_last_save_${rId}`, Date.now().toString());
+  } catch (err) {
+    console.warn("Error saving local notes:", err);
+  }
+}
+
+function loadLocalActiveNoteId(rId: string, availableNotes: Note[]): string {
+  try {
+    const savedId = localStorage.getItem(`bloco_active_note_${rId}`);
+    if (savedId && availableNotes.some((n) => n.id === savedId)) {
+      return savedId;
+    }
+  } catch (err) {
+    console.warn("Error reading active note id:", err);
+  }
+  return availableNotes.length > 0 ? availableNotes[0].id : "";
+}
+
+function saveLocalActiveNoteId(rId: string, noteId: string) {
+  try {
+    if (noteId) {
+      localStorage.setItem(`bloco_active_note_${rId}`, noteId);
+    }
+  } catch (err) {
+    // ignore
+  }
+}
+
+function mergeNotes(localList: Note[], remoteList: Note[]): Note[] {
+  if (!Array.isArray(remoteList) || remoteList.length === 0) {
+    return localList;
+  }
+  const map = new Map<string, Note>();
+  for (const rNote of remoteList) {
+    map.set(rNote.id, rNote);
+  }
+  for (const lNote of localList) {
+    const remote = map.get(lNote.id);
+    if (!remote) {
+      // Note was created locally while offline -> keep it!
+      map.set(lNote.id, lNote);
+    } else {
+      // If local has newer timestamp, keep local so recent offline edits aren't lost
+      if ((lNote.updatedAt || 0) > (remote.updatedAt || 0)) {
+        map.set(lNote.id, lNote);
+      }
+    }
+  }
+  return Array.from(map.values()).sort((a, b) => {
+    if (a.pinned && !b.pinned) return -1;
+    if (!a.pinned && b.pinned) return 1;
+    return (b.updatedAt || 0) - (a.updatedAt || 0);
+  });
+}
+
 function getDeviceColor(): string {
   let color = localStorage.getItem("bloco_device_color");
   if (!color) {
@@ -53,9 +158,11 @@ export interface UseRealtimeSyncReturn {
   setRoomId: (id: string) => void;
   setActiveNoteId: (id: string) => void;
   updateActiveNote: (fields: Partial<Note>) => void;
+  updateNoteById: (id: string, fields: Partial<Note>) => void;
   createNote: () => Note;
   deleteNote: (id: string) => void;
   duplicateNote: (note: Note) => void;
+  forceSync: () => void;
   devices: ConnectedDevice[];
   isConnected: boolean;
   syncState: "synced" | "saving" | "offline" | "connecting";
@@ -75,12 +182,27 @@ export function useRealtimeSync(initialRoomId?: string): UseRealtimeSyncReturn {
     return initialRoomId || localStorage.getItem("bloco_current_room") || "meu-bloco";
   });
 
-  const [notes, setNotes] = useState<Note[]>([]);
-  const [activeNoteId, setActiveNoteId] = useState<string>("");
+  const [notes, setNotes] = useState<Note[]>(() => {
+    const urlParams = new URLSearchParams(window.location.search);
+    const rId = urlParams.get("room") || initialRoomId || localStorage.getItem("bloco_current_room") || "meu-bloco";
+    return loadLocalNotes(rId);
+  });
+
+  const [activeNoteId, setActiveNoteIdState] = useState<string>(() => {
+    const urlParams = new URLSearchParams(window.location.search);
+    const rId = urlParams.get("room") || initialRoomId || localStorage.getItem("bloco_current_room") || "meu-bloco";
+    const initialNotes = loadLocalNotes(rId);
+    return loadLocalActiveNoteId(rId, initialNotes);
+  });
+
   const [devices, setDevices] = useState<ConnectedDevice[]>([]);
   const [isConnected, setIsConnected] = useState<boolean>(false);
   const [syncState, setSyncState] = useState<"synced" | "saving" | "offline" | "connecting">("connecting");
-  const [lastSavedAt, setLastSavedAt] = useState<number | null>(null);
+  const [lastSavedAt, setLastSavedAt] = useState<number | null>(() => {
+    const rId = localStorage.getItem("bloco_current_room") || "meu-bloco";
+    const saved = localStorage.getItem(`bloco_notes_last_save_${rId}`);
+    return saved ? parseInt(saved, 10) : Date.now();
+  });
   const [remoteTypingDevice, setRemoteTypingDevice] = useState<string | null>(null);
 
   const [deviceId] = useState<string>(getDeviceId);
@@ -106,6 +228,18 @@ export function useRealtimeSync(initialRoomId?: string): UseRealtimeSyncReturn {
     localStorage.setItem("bloco_device_name", name);
   }, []);
 
+  const setActiveNoteId = useCallback(
+    (idOrUpdater: string | ((curr: string) => string)) => {
+      setActiveNoteIdState((prev) => {
+        const nextId = typeof idOrUpdater === "function" ? idOrUpdater(prev) : idOrUpdater;
+        activeNoteIdRef.current = nextId;
+        saveLocalActiveNoteId(roomId, nextId);
+        return nextId;
+      });
+    },
+    [roomId]
+  );
+
   const setRoomId = useCallback((newRoom: string) => {
     const cleanRoom = newRoom.trim().toLowerCase().replace(/[^a-z0-9_-]/g, "-") || "meu-bloco";
     setRoomState(cleanRoom);
@@ -115,51 +249,51 @@ export function useRealtimeSync(initialRoomId?: string): UseRealtimeSyncReturn {
     const url = new URL(window.location.href);
     url.searchParams.set("room", cleanRoom);
     window.history.replaceState({}, "", url.toString());
+
+    // Immediately load local notes for this room so no blank screen
+    const localNotes = loadLocalNotes(cleanRoom);
+    setNotes(localNotes);
+    const activeId = loadLocalActiveNoteId(cleanRoom, localNotes);
+    setActiveNoteIdState(activeId);
+    activeNoteIdRef.current = activeId;
   }, []);
 
   // Fetch from REST API (initial load + polling fallback)
-  const fetchNotesRest = useCallback(async (rId: string) => {
-    try {
-      const res = await fetch(`/api/rooms/${rId}/notes`);
-      if (res.ok) {
-        const data = await res.json();
-        if (Array.isArray(data.notes) && data.notes.length > 0) {
-          setNotes((currentNotes) => {
-            // Check if there are real changes
-            if (currentNotes.length !== data.notes.length) {
-              return data.notes;
-            }
-            let hasDifference = false;
-            for (const sNote of data.notes) {
-              const local = currentNotes.find((n) => n.id === sNote.id);
-              if (
-                !local ||
-                (sNote.updatedAt && local.updatedAt && sNote.updatedAt > local.updatedAt) ||
-                sNote.content !== local.content ||
-                sNote.title !== local.title
-              ) {
-                hasDifference = true;
-                break;
-              }
-            }
-            if (!hasDifference) return currentNotes;
-            return data.notes;
-          });
+  const fetchNotesRest = useCallback(
+    async (rId: string) => {
+      try {
+        const res = await fetch(`/api/rooms/${rId}/notes`);
+        if (res.ok) {
+          const data = await res.json();
+          if (Array.isArray(data.notes)) {
+            setNotes((currentNotes) => {
+              const merged = mergeNotes(currentNotes, data.notes);
+              saveLocalNotes(rId, merged);
+              return merged;
+            });
 
-          setActiveNoteId((current) => {
-            if (current && data.notes.some((n: Note) => n.id === current)) {
-              return current;
-            }
-            return data.notes.length > 0 ? data.notes[0].id : "";
-          });
-          setSyncState("synced");
-          setLastSavedAt(Date.now());
+            setActiveNoteId((current) => {
+              if (current && notesRef.current.some((n: Note) => n.id === current)) {
+                return current;
+              }
+              return loadLocalActiveNoteId(rId, notesRef.current);
+            });
+            setSyncState("synced");
+            setLastSavedAt(Date.now());
+          }
+        } else {
+          if (!wsRef.current || wsRef.current.readyState !== WebSocket.OPEN) {
+            setSyncState("offline");
+          }
+        }
+      } catch {
+        if (!wsRef.current || wsRef.current.readyState !== WebSocket.OPEN) {
+          setSyncState("offline");
         }
       }
-    } catch (err) {
-      console.warn("Could not fetch notes from REST API fallback:", err);
-    }
-  }, []);
+    },
+    [setActiveNoteId]
+  );
 
   // Instant local multi-tab / multi-screen sync via BroadcastChannel
   useEffect(() => {
@@ -175,20 +309,25 @@ export function useRealtimeSync(initialRoomId?: string): UseRealtimeSyncReturn {
           const updatedNote: Note = data.note;
           setNotes((prev) => {
             const index = prev.findIndex((n) => n.id === updatedNote.id);
+            let next: Note[];
             if (index >= 0) {
-              const copy = [...prev];
-              copy[index] = updatedNote;
-              return copy;
+              next = [...prev];
+              next[index] = updatedNote;
+            } else {
+              next = [updatedNote, ...prev];
             }
-            return [updatedNote, ...prev];
+            saveLocalNotes(roomId, next);
+            return next;
           });
           setSyncState("synced");
           setLastSavedAt(Date.now());
         } else if (data.type === "note_delete" && data.noteId) {
           setNotes((prev) => {
             const nextNotes = prev.filter((n) => n.id !== data.noteId);
+            saveLocalNotes(roomId, nextNotes);
             if (activeNoteIdRef.current === data.noteId) {
-              setActiveNoteId(nextNotes.length > 0 ? nextNotes[0].id : "");
+              const nextId = nextNotes.length > 0 ? nextNotes[0].id : "";
+              setActiveNoteId(nextId);
             }
             return nextNotes;
           });
@@ -200,7 +339,7 @@ export function useRealtimeSync(initialRoomId?: string): UseRealtimeSyncReturn {
         bcRef.current = null;
       };
     }
-  }, [roomId]);
+  }, [roomId, setActiveNoteId]);
 
   // Periodic polling & window visibility / focus recovery (for phones waking up, tab switching, etc.)
   useEffect(() => {
@@ -208,7 +347,7 @@ export function useRealtimeSync(initialRoomId?: string): UseRealtimeSyncReturn {
       if (document.visibilityState === "visible") {
         fetchNotesRest(roomId);
       }
-    }, 2500);
+    }, 3000);
 
     const handleVisibilityOrFocus = () => {
       if (document.visibilityState === "visible") {
@@ -295,32 +434,42 @@ export function useRealtimeSync(initialRoomId?: string): UseRealtimeSyncReturn {
 
             if (data.type === "init") {
               if (Array.isArray(data.notes) && data.notes.length > 0) {
-                setNotes(data.notes);
+                setNotes((currentNotes) => {
+                  const merged = mergeNotes(currentNotes, data.notes);
+                  saveLocalNotes(roomId, merged);
+                  return merged;
+                });
                 setActiveNoteId((curr) => {
-                  if (curr && data.notes.some((n: Note) => n.id === curr)) return curr;
-                  return data.notes[0].id;
+                  if (curr && notesRef.current.some((n: Note) => n.id === curr)) return curr;
+                  return loadLocalActiveNoteId(roomId, notesRef.current);
                 });
               }
+              setIsConnected(true);
               setSyncState("synced");
               setLastSavedAt(Date.now());
             } else if (data.type === "note_update" && data.note) {
               const updatedNote: Note = data.note;
               setNotes((prev) => {
                 const index = prev.findIndex((n) => n.id === updatedNote.id);
+                let next: Note[];
                 if (index >= 0) {
-                  const copy = [...prev];
-                  copy[index] = updatedNote;
-                  return copy;
+                  next = [...prev];
+                  next[index] = updatedNote;
+                } else {
+                  next = [updatedNote, ...prev];
                 }
-                return [updatedNote, ...prev];
+                saveLocalNotes(roomId, next);
+                return next;
               });
               setSyncState("synced");
               setLastSavedAt(Date.now());
             } else if (data.type === "note_delete" && data.noteId) {
               setNotes((prev) => {
                 const nextNotes = prev.filter((n) => n.id !== data.noteId);
+                saveLocalNotes(roomId, nextNotes);
                 if (activeNoteIdRef.current === data.noteId) {
-                  setActiveNoteId(nextNotes.length > 0 ? nextNotes[0].id : "");
+                  const nextId = nextNotes.length > 0 ? nextNotes[0].id : "";
+                  setActiveNoteId(nextId);
                 }
                 return nextNotes;
               });
@@ -347,12 +496,11 @@ export function useRealtimeSync(initialRoomId?: string): UseRealtimeSyncReturn {
 
         ws.onerror = () => {
           setIsConnected(false);
-          setSyncState("offline");
+          // Keep offline state visible if REST is also down
         };
 
         ws.onclose = () => {
           setIsConnected(false);
-          setSyncState("offline");
           if (pingInterval) clearInterval(pingInterval);
           if (isMounted) {
             reconnectTimer = setTimeout(() => {
@@ -378,16 +526,15 @@ export function useRealtimeSync(initialRoomId?: string): UseRealtimeSyncReturn {
         wsRef.current.close();
       }
     };
-  }, [roomId, deviceId, deviceName, deviceColor, fetchNotesRest]);
+  }, [roomId, deviceId, deviceName, deviceColor, fetchNotesRest, setActiveNoteId]);
 
   // Active note helper
   const activeNote = notes.find((n) => n.id === activeNoteId) || (notes.length > 0 ? notes[0] : null);
 
-  // Update active note content or title with instant local broadcast and debounced network send
-  const updateActiveNote = useCallback(
-    (fields: Partial<Note>) => {
-      if (!activeNoteIdRef.current) return;
-      const targetId = activeNoteIdRef.current;
+  // Update note by ID with instant local sync & debounced network send
+  const updateNoteById = useCallback(
+    (targetId: string, fields: Partial<Note>) => {
+      if (!targetId) return;
 
       setSyncState("saving");
 
@@ -404,12 +551,13 @@ export function useRealtimeSync(initialRoomId?: string): UseRealtimeSyncReturn {
 
       pendingNotesRef.current.set(targetId, updated);
 
-      // Immediately update local state
+      // Immediately update local state AND synchronously save to localStorage
       setNotes((prev) => {
         const index = prev.findIndex((n) => n.id === targetId);
         if (index < 0) return prev;
         const copy = [...prev];
         copy[index] = updated;
+        saveLocalNotes(roomId, copy);
         return copy;
       });
 
@@ -427,7 +575,11 @@ export function useRealtimeSync(initialRoomId?: string): UseRealtimeSyncReturn {
       }
 
       // Broadcast typing indicator to remote devices
-      if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
+      if (
+        wsRef.current &&
+        wsRef.current.readyState === WebSocket.OPEN &&
+        (fields.content !== undefined || fields.title !== undefined)
+      ) {
         const typingMsg: SyncMessage = {
           type: "typing",
           roomId,
@@ -468,13 +620,21 @@ export function useRealtimeSync(initialRoomId?: string): UseRealtimeSyncReturn {
           },
           body: JSON.stringify(noteToSend),
         })
-          .then(() => {
-            setSyncState("synced");
-            setLastSavedAt(Date.now());
+          .then((res) => {
+            if (res.ok) {
+              setSyncState("synced");
+              setLastSavedAt(Date.now());
+            } else {
+              if (!wsRef.current || wsRef.current.readyState !== WebSocket.OPEN) {
+                setSyncState("offline");
+              }
+            }
           })
           .catch((err) => {
             console.warn("Rest save error:", err);
-            setSyncState("synced");
+            if (!wsRef.current || wsRef.current.readyState !== WebSocket.OPEN) {
+              setSyncState("offline");
+            }
           });
       }, 150);
 
@@ -499,6 +659,15 @@ export function useRealtimeSync(initialRoomId?: string): UseRealtimeSyncReturn {
     [roomId, deviceId, deviceName]
   );
 
+  // Update active note helper
+  const updateActiveNote = useCallback(
+    (fields: Partial<Note>) => {
+      if (!activeNoteIdRef.current) return;
+      updateNoteById(activeNoteIdRef.current, fields);
+    },
+    [updateNoteById]
+  );
+
   // Create new note
   const createNote = useCallback(() => {
     const newNote: Note = {
@@ -512,7 +681,11 @@ export function useRealtimeSync(initialRoomId?: string): UseRealtimeSyncReturn {
       version: 1,
     };
 
-    setNotes((prev) => [newNote, ...prev]);
+    setNotes((prev) => {
+      const nextNotes = [newNote, ...prev];
+      saveLocalNotes(roomId, nextNotes);
+      return nextNotes;
+    });
     setActiveNoteId(newNote.id);
     setSyncState("saving");
 
@@ -551,21 +724,31 @@ export function useRealtimeSync(initialRoomId?: string): UseRealtimeSyncReturn {
         "x-device-id": deviceId,
       },
       body: JSON.stringify(newNote),
-    }).then(() => {
-      setSyncState("synced");
-      setLastSavedAt(Date.now());
-    });
+    })
+      .then((res) => {
+        if (res.ok) {
+          setSyncState("synced");
+          setLastSavedAt(Date.now());
+        }
+      })
+      .catch(() => {
+        if (!wsRef.current || wsRef.current.readyState !== WebSocket.OPEN) {
+          setSyncState("offline");
+        }
+      });
 
     return newNote;
-  }, [roomId, deviceId, deviceName]);
+  }, [roomId, deviceId, deviceName, setActiveNoteId]);
 
   // Delete note
   const deleteNote = useCallback(
     (id: string) => {
       setNotes((prev) => {
         const nextNotes = prev.filter((n) => n.id !== id);
+        saveLocalNotes(roomId, nextNotes);
         if (activeNoteIdRef.current === id) {
-          setActiveNoteId(nextNotes.length > 0 ? nextNotes[0].id : "");
+          const nextId = nextNotes.length > 0 ? nextNotes[0].id : "";
+          setActiveNoteId(nextId);
         }
         return nextNotes;
       });
@@ -600,9 +783,9 @@ export function useRealtimeSync(initialRoomId?: string): UseRealtimeSyncReturn {
       fetch(`/api/rooms/${roomId}/notes/${id}`, {
         method: "DELETE",
         headers: { "x-device-id": deviceId },
-      });
+      }).catch(() => {});
     },
-    [roomId, deviceId]
+    [roomId, deviceId, setActiveNoteId]
   );
 
   // Duplicate note
@@ -617,7 +800,11 @@ export function useRealtimeSync(initialRoomId?: string): UseRealtimeSyncReturn {
         version: 1,
       };
 
-      setNotes((prev) => [cloned, ...prev]);
+      setNotes((prev) => {
+        const nextNotes = [cloned, ...prev];
+        saveLocalNotes(roomId, nextNotes);
+        return nextNotes;
+      });
       setActiveNoteId(cloned.id);
 
       // Broadcast to local tabs
@@ -653,10 +840,19 @@ export function useRealtimeSync(initialRoomId?: string): UseRealtimeSyncReturn {
           "x-device-id": deviceId,
         },
         body: JSON.stringify(cloned),
-      });
+      }).catch(() => {});
     },
-    [roomId, deviceId, deviceName]
+    [roomId, deviceId, deviceName, setActiveNoteId]
   );
+
+  // Force sync / manual refresh
+  const forceSync = useCallback(() => {
+    setSyncState("saving");
+    fetchNotesRest(roomId);
+    if (!wsRef.current || wsRef.current.readyState !== WebSocket.OPEN) {
+      connectWsRef.current?.();
+    }
+  }, [roomId, fetchNotesRest]);
 
   return {
     notes,
@@ -666,9 +862,11 @@ export function useRealtimeSync(initialRoomId?: string): UseRealtimeSyncReturn {
     setRoomId,
     setActiveNoteId,
     updateActiveNote,
+    updateNoteById,
     createNote,
     deleteNote,
     duplicateNote,
+    forceSync,
     devices,
     isConnected,
     syncState,
