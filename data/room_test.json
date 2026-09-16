@@ -1,0 +1,15 @@
+[
+  {
+    "id": "welcome-note",
+    "title": "Bem-vindo ao Bloco de Notas Nuvem",
+    "content": "Bem-vindo ao seu Bloco de Notas com Sincronização em Tempo Real e Nuvem! 🚀\n\nRecursos principais:\n• ☁️ Salvamento automático contínuo na nuvem\n• 🔄 Sincronização em tempo real entre celulares, tablets e computadores\n• 💾 Exportação em múltiplos formatos: PDF, DOC, DOCX, TXT, TFT, BAT, HTML, MD, JSON, etc.\n• 📱 Conexão instantânea por Código de Sala ou QR Code\n• 🎨 Fontes ajustáveis (Mono, Sans, Serif) e temas personalizáveis\n• 🔍 Ferramenta de Localizar e Substituir (Ctrl+F)\n• 📋 Contagem ao vivo de palavras, caracteres, linhas e tempo de leitura\n\nPara testar a sincronização em tempo real:\n1. Abra esta mesma página em outra aba ou em seu smartphone.\n2. Digite aqui e veja o texto se atualizar instantaneamente no outro dispositivo!",
+    "tags": [
+      "Boas-vindas",
+      "Tutorial"
+    ],
+    "pinned": true,
+    "createdAt": 1789527000929,
+    "updatedAt": 1789527000929,
+    "version": 1
+  }
+]

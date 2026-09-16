@@ -96,6 +96,43 @@ async function startServer() {
 
   app.use(express.json({ limit: "15mb" }));
 
+  // Broadcast helpers to notify all WebSocket clients in a room
+  function broadcastNoteUpdate(targetRoom: string, noteToBroadcast: Note, senderDeviceId?: string) {
+    const broadcastMsg = JSON.stringify({
+      type: "note_update",
+      roomId: targetRoom,
+      deviceId: senderDeviceId || "server",
+      note: noteToBroadcast,
+      timestamp: Date.now(),
+    });
+
+    for (const [otherWs, otherMeta] of clients.entries()) {
+      if (otherMeta.roomId === targetRoom && otherWs.readyState === WebSocket.OPEN) {
+        if (!senderDeviceId || otherMeta.deviceId !== senderDeviceId) {
+          otherWs.send(broadcastMsg);
+        }
+      }
+    }
+  }
+
+  function broadcastNoteDelete(targetRoom: string, noteIdToDelete: string, senderDeviceId?: string) {
+    const broadcastMsg = JSON.stringify({
+      type: "note_delete",
+      roomId: targetRoom,
+      deviceId: senderDeviceId || "server",
+      noteId: noteIdToDelete,
+      timestamp: Date.now(),
+    });
+
+    for (const [otherWs, otherMeta] of clients.entries()) {
+      if (otherMeta.roomId === targetRoom && otherWs.readyState === WebSocket.OPEN) {
+        if (!senderDeviceId || otherMeta.deviceId !== senderDeviceId) {
+          otherWs.send(broadcastMsg);
+        }
+      }
+    }
+  }
+
   // REST API Routes
   app.get("/api/health", (_req, res) => {
     res.json({ status: "ok", time: Date.now() });
@@ -105,13 +142,14 @@ async function startServer() {
   app.get("/api/rooms/:roomId/notes", (req, res) => {
     const roomId = req.params.roomId || "default";
     const notes = loadRoomNotes(roomId);
-    res.json({ roomId, notes });
+    res.json({ roomId, notes, timestamp: Date.now() });
   });
 
   // Save or update note
   app.post("/api/rooms/:roomId/notes", (req, res) => {
     const roomId = req.params.roomId || "default";
     const note: Note = req.body;
+    const senderDeviceId = (req.headers["x-device-id"] as string) || undefined;
     if (!note || !note.id) {
       res.status(400).json({ error: "Invalid note payload" });
       return;
@@ -119,27 +157,59 @@ async function startServer() {
 
     const notes = loadRoomNotes(roomId);
     const existingIndex = notes.findIndex((n) => n.id === note.id);
+    const savedNote: Note = {
+      ...note,
+      updatedAt: note.updatedAt || Date.now(),
+      version: (note.version || 1),
+    };
+
     if (existingIndex >= 0) {
-      notes[existingIndex] = { ...note, updatedAt: Date.now() };
+      notes[existingIndex] = savedNote;
     } else {
-      notes.unshift({ ...note, updatedAt: Date.now() });
+      notes.unshift(savedNote);
     }
     saveRoomNotes(roomId, notes);
-    res.json({ success: true, note });
+
+    // Broadcast change to all connected WebSocket clients in the room
+    broadcastNoteUpdate(roomId, savedNote, senderDeviceId);
+
+    res.json({ success: true, note: savedNote });
   });
 
   // Delete note
   app.delete("/api/rooms/:roomId/notes/:noteId", (req, res) => {
     const { roomId, noteId } = req.params;
+    const senderDeviceId = (req.headers["x-device-id"] as string) || undefined;
     const notes = loadRoomNotes(roomId);
     const filtered = notes.filter((n) => n.id !== noteId);
     saveRoomNotes(roomId, filtered);
+
+    // Broadcast deletion to all connected WebSocket clients in the room
+    broadcastNoteDelete(roomId, noteId, senderDeviceId);
+
     res.json({ success: true, noteId });
   });
 
   // WebSocket Server for instant multi-device real-time sync
   const wss = new WebSocketServer({ server, path: "/ws" });
   const clients = new Map<WebSocket, ClientMeta>();
+
+  // WebSocket keep-alive ping interval to prevent Cloud Run/reverse proxy idle timeouts
+  const pingInterval = setInterval(() => {
+    for (const [clientWs] of clients.entries()) {
+      if (clientWs.readyState === WebSocket.OPEN) {
+        try {
+          clientWs.ping();
+        } catch {
+          // ignore error
+        }
+      }
+    }
+  }, 25000);
+
+  server.on("close", () => {
+    clearInterval(pingInterval);
+  });
 
   function broadcastRoomPresence(roomId: string) {
     const roomDevices: Array<{
@@ -183,6 +253,13 @@ async function startServer() {
       try {
         const msg = JSON.parse(raw.toString());
         const { type, roomId, deviceId, deviceName, deviceColor, note, noteId, isTyping, currentNoteId } = msg;
+
+        if (type === "ping") {
+          if (ws.readyState === WebSocket.OPEN) {
+            ws.send(JSON.stringify({ type: "pong", timestamp: Date.now() }));
+          }
+          return;
+        }
 
         if (type === "join") {
           clients.set(ws, {

@@ -54,6 +54,67 @@ interface RichEditorProps {
   onOpenExport: () => void;
 }
 
+// Helpers to preserve cursor position when content changes remotely
+function getCaretCharacterOffsetWithin(element: HTMLElement): number {
+  let caretOffset = 0;
+  try {
+    const doc = element.ownerDocument || document;
+    const win = doc.defaultView || window;
+    const sel = win.getSelection();
+    if (sel && sel.rangeCount > 0) {
+      const range = sel.getRangeAt(0);
+      const preCaretRange = range.cloneRange();
+      preCaretRange.selectNodeContents(element);
+      preCaretRange.setEnd(range.endContainer, range.endOffset);
+      caretOffset = preCaretRange.toString().length;
+    }
+  } catch {
+    // Ignore selection read errors
+  }
+  return caretOffset;
+}
+
+function setCaretPosition(element: HTMLElement, offset: number) {
+  try {
+    const doc = element.ownerDocument || document;
+    const win = doc.defaultView || window;
+    const sel = win.getSelection();
+    if (!sel) return;
+
+    let currentOffset = 0;
+    const nodeStack: Node[] = [element];
+    let node: Node | undefined;
+    let found = false;
+
+    const range = doc.createRange();
+    range.setStart(element, 0);
+    range.collapse(true);
+
+    while (!found && (node = nodeStack.pop())) {
+      if (node.nodeType === Node.TEXT_NODE) {
+        const textLen = node.textContent?.length || 0;
+        if (currentOffset + textLen >= offset) {
+          range.setStart(node, Math.min(offset - currentOffset, textLen));
+          range.collapse(true);
+          found = true;
+        } else {
+          currentOffset += textLen;
+        }
+      } else {
+        let i = node.childNodes.length;
+        while (i--) {
+          nodeStack.push(node.childNodes[i]);
+        }
+      }
+    }
+
+    sel.removeAllRanges();
+    sel.addRange(range);
+  } catch {
+    // Graceful fallback if DOM tree shifted
+  }
+}
+
 export const RichEditor: React.FC<RichEditorProps> = ({
   note,
   onUpdateNote,
@@ -110,15 +171,7 @@ export const RichEditor: React.FC<RichEditorProps> = ({
     localStorage.setItem("bloco_page_view_mode", pageViewMode);
   }, [pageViewMode]);
 
-  // Sync note content to editable div when note ID changes or external update
-  useEffect(() => {
-    if (!note) return;
-    if (contentEditableRef.current) {
-      if (contentEditableRef.current.innerHTML !== (note.content || "")) {
-        contentEditableRef.current.innerHTML = note.content || "";
-      }
-    }
-  }, [note?.id]);
+  const lastEmittedHtmlRef = useRef<string>(note?.content || "");
 
   // Check active formatting for toolbar feedback
   const updateActiveFormats = useCallback(() => {
@@ -145,9 +198,38 @@ export const RichEditor: React.FC<RichEditorProps> = ({
     }
   }, [editorMode]);
 
+  // Sync note content to editable div when note ID changes or external update from other device/screen
+  useEffect(() => {
+    if (!note) return;
+    const targetEl = contentEditableRef.current;
+    if (!targetEl) return;
+
+    const incomingHtml = note.content || "";
+
+    // If incomingHtml matches what local user just typed, skip to avoid resetting cursor
+    if (incomingHtml === lastEmittedHtmlRef.current && targetEl.innerHTML === incomingHtml) {
+      return;
+    }
+
+    // External change from another device, screen, or note switch
+    if (targetEl.innerHTML !== incomingHtml) {
+      lastEmittedHtmlRef.current = incomingHtml;
+      const isFocused = document.activeElement === targetEl;
+      if (isFocused) {
+        const offset = getCaretCharacterOffsetWithin(targetEl);
+        targetEl.innerHTML = incomingHtml;
+        setCaretPosition(targetEl, offset);
+      } else {
+        targetEl.innerHTML = incomingHtml;
+      }
+      updateActiveFormats();
+    }
+  }, [note?.id, note?.content, updateActiveFormats]);
+
   const handleEditableInput = () => {
     if (!contentEditableRef.current || !note) return;
     const html = contentEditableRef.current.innerHTML;
+    lastEmittedHtmlRef.current = html;
     onUpdateNote({ content: html });
     updateActiveFormats();
   };
