@@ -151,27 +151,27 @@ export const DeviceSyncModal: React.FC<DeviceSyncModalProps> = ({
   return (
     <div
       id="sync-modal-backdrop"
-      className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-xs animate-in fade-in"
+      className="fixed inset-0 z-50 flex items-center justify-center p-2.5 sm:p-4 bg-black/50 backdrop-blur-xs animate-in fade-in"
       onClick={onClose}
     >
       <div
         id="sync-modal"
-        className="bg-white dark:bg-neutral-900 border border-neutral-200 dark:border-neutral-800 rounded-2xl max-w-lg w-full shadow-2xl overflow-hidden flex flex-col max-h-[90vh]"
+        className="bg-white dark:bg-neutral-900 border border-neutral-200 dark:border-neutral-800 rounded-2xl max-w-lg w-full shadow-2xl overflow-hidden flex flex-col max-h-[92vh] sm:max-h-[90vh]"
         onClick={(e) => e.stopPropagation()}
       >
         {/* Header */}
-        <div className="flex items-center justify-between px-6 py-4 border-b border-neutral-100 dark:border-neutral-800">
-          <div className="flex items-center gap-3">
-            <div className="p-2.5 rounded-xl bg-neutral-100 dark:bg-neutral-800 text-neutral-800 dark:text-neutral-200">
+        <div className="flex items-center justify-between px-4 sm:px-6 py-3.5 sm:py-4 border-b border-neutral-100 dark:border-neutral-800">
+          <div className="flex items-center gap-2.5 sm:gap-3 min-w-0">
+            <div className="p-2 sm:p-2.5 rounded-xl bg-neutral-100 dark:bg-neutral-800 text-neutral-800 dark:text-neutral-200 shrink-0">
               <Github className="w-5 h-5" />
             </div>
-            <div>
-              <h2 className="text-lg font-semibold text-neutral-900 dark:text-white">
+            <div className="min-w-0">
+              <h2 className="text-base sm:text-lg font-semibold text-neutral-900 dark:text-white truncate">
                 Sincronização entre Aparelhos
               </h2>
               <div className="flex items-center gap-1.5 mt-0.5">
                 <span
-                  className={`w-2 h-2 rounded-full ${
+                  className={`w-2 h-2 rounded-full shrink-0 ${
                     githubSync?.isConfigured
                       ? "bg-emerald-500 animate-pulse"
                       : isConnected
@@ -181,7 +181,7 @@ export const DeviceSyncModal: React.FC<DeviceSyncModalProps> = ({
                       : "bg-blue-400 animate-pulse"
                   }`}
                 />
-                <span className="text-xs text-neutral-500 dark:text-neutral-400">
+                <span className="text-[11px] sm:text-xs text-neutral-500 dark:text-neutral-400 truncate">
                   {githubSync?.isConfigured
                     ? `Sincronizado com GitHub (@${githubSync.username})`
                     : isConnected
@@ -197,18 +197,18 @@ export const DeviceSyncModal: React.FC<DeviceSyncModalProps> = ({
             id="close-sync-modal"
             type="button"
             onClick={onClose}
-            className="p-2 text-neutral-400 hover:text-neutral-600 dark:hover:text-neutral-200 rounded-lg hover:bg-neutral-100 dark:hover:bg-neutral-800 transition-colors"
+            className="min-w-[36px] min-h-[36px] p-2 text-neutral-400 hover:text-neutral-600 dark:hover:text-neutral-200 rounded-lg hover:bg-neutral-100 dark:hover:bg-neutral-800 transition-colors flex items-center justify-center shrink-0"
           >
             <X className="w-5 h-5" />
           </button>
         </div>
 
         {/* Navigation Tabs */}
-        <div className="flex border-b border-neutral-100 dark:border-neutral-800 px-6 bg-neutral-50/50 dark:bg-neutral-900/50">
+        <div className="flex border-b border-neutral-100 dark:border-neutral-800 px-3 sm:px-6 bg-neutral-50/50 dark:bg-neutral-900/50 overflow-x-auto no-scrollbar">
           <button
             type="button"
             onClick={() => setActiveTab("gist")}
-            className={`flex items-center gap-2 py-3 px-3 text-xs font-semibold border-b-2 transition-colors ${
+            className={`flex items-center gap-1.5 sm:gap-2 py-2.5 sm:py-3 px-2 sm:px-3 text-xs font-semibold border-b-2 transition-colors whitespace-nowrap shrink-0 ${
               activeTab === "gist"
                 ? "border-neutral-900 dark:border-white text-neutral-900 dark:text-white"
                 : "border-transparent text-neutral-500 hover:text-neutral-800 dark:hover:text-neutral-200"
@@ -216,7 +216,7 @@ export const DeviceSyncModal: React.FC<DeviceSyncModalProps> = ({
           >
             <Github className="w-4 h-4" />
             <span>GitHub Gist (100% Grátis)</span>
-            <span className="text-[10px] bg-emerald-100 dark:bg-emerald-950/60 text-emerald-700 dark:text-emerald-300 px-1.5 py-0.2 rounded font-medium">
+            <span className="text-[9px] sm:text-[10px] bg-emerald-100 dark:bg-emerald-950/60 text-emerald-700 dark:text-emerald-300 px-1.5 py-0.2 rounded font-medium">
               Recomendado
             </span>
           </button>
@@ -224,7 +224,7 @@ export const DeviceSyncModal: React.FC<DeviceSyncModalProps> = ({
           <button
             type="button"
             onClick={() => setActiveTab("live")}
-            className={`flex items-center gap-2 py-3 px-3 text-xs font-semibold border-b-2 transition-colors ${
+            className={`flex items-center gap-1.5 sm:gap-2 py-2.5 sm:py-3 px-2 sm:px-3 text-xs font-semibold border-b-2 transition-colors whitespace-nowrap shrink-0 ${
               activeTab === "live"
                 ? "border-blue-600 text-blue-600 dark:text-blue-400"
                 : "border-transparent text-neutral-500 hover:text-neutral-800 dark:hover:text-neutral-200"
@@ -236,7 +236,7 @@ export const DeviceSyncModal: React.FC<DeviceSyncModalProps> = ({
         </div>
 
         {/* Body */}
-        <div className="p-6 overflow-y-auto space-y-6">
+        <div className="p-4 sm:p-6 overflow-y-auto space-y-4 sm:space-y-6">
           {activeTab === "gist" && (
             <div className="space-y-4">
               {/* How it works banner */}

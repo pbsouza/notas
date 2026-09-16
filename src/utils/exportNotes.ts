@@ -8,8 +8,9 @@ function htmlToPlainText(html: string): string {
   if (!html) return "";
   if (!html.includes("<") || !html.includes(">")) return html;
   
-  // Replace line breaks and paragraph/list tags with newlines
+  // Replace line breaks, page breaks, and paragraph/list tags with newlines
   const formatted = html
+    .replace(/<div[^>]*class=["'][^"']*(?:a4-page-break|docx-page-break)[^"']*["'][^>]*>.*?<\/div>/gi, "\n\n--- [ Quebra de Folha A4 ] ---\n\n")
     .replace(/<br\s*[\/]?>/gi, "\n")
     .replace(/<\/p>/gi, "\n\n")
     .replace(/<\/h[1-6]>/gi, "\n\n")
@@ -195,23 +196,35 @@ export async function exportNote(note: Note, format: ExportFormatId): Promise<vo
 
       currentY += 10;
 
-      // Content
+      // Content rendering with support for explicit A4 page breaks
       doc.setFont("helvetica", "normal");
       doc.setFontSize(11);
       doc.setTextColor(51, 65, 85);
 
-      const plain = htmlToPlainText(note.content || "");
-      const contentLines: string[] = doc.splitTextToSize(plain, maxLineWidth);
+      const rawHtml = note.content || "";
+      const pageChunks = rawHtml.split(
+        /<div[^>]*class=["'][^"']*(?:a4-page-break|docx-page-break)[^"']*["'][^>]*>.*?<\/div>/gi
+      );
       const lineHeight = 6;
 
-      for (let i = 0; i < contentLines.length; i++) {
-        if (currentY + lineHeight > pageHeight - margin) {
+      pageChunks.forEach((chunkHtml, chunkIdx) => {
+        if (chunkIdx > 0) {
           doc.addPage();
-          currentY = margin;
+          currentY = margin + 5;
         }
-        doc.text(contentLines[i], margin, currentY);
-        currentY += lineHeight;
-      }
+
+        const plain = htmlToPlainText(chunkHtml);
+        const contentLines: string[] = doc.splitTextToSize(plain, maxLineWidth);
+
+        for (let i = 0; i < contentLines.length; i++) {
+          if (currentY + lineHeight > pageHeight - margin) {
+            doc.addPage();
+            currentY = margin + 5;
+          }
+          doc.text(contentLines[i], margin, currentY);
+          currentY += lineHeight;
+        }
+      });
 
       // Footer
       const totalPages = doc.getNumberOfPages();

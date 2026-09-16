@@ -80,9 +80,9 @@ export const FindReplaceBar: React.FC<FindReplaceBarProps> = ({
   return (
     <div
       id="find-replace-bar"
-      className="flex flex-wrap items-center gap-2 p-3 bg-white/95 dark:bg-neutral-800/95 backdrop-blur border-b border-neutral-200 dark:border-neutral-700 shadow-sm z-20 text-xs sm:text-sm"
+      className="flex flex-wrap items-center gap-2 p-2.5 sm:p-3 bg-white/95 dark:bg-neutral-800/95 backdrop-blur border-b border-neutral-200 dark:border-neutral-700 shadow-sm z-20 text-xs"
     >
-      <div className="flex items-center gap-1.5 flex-1 min-w-[200px]">
+      <div className="flex items-center gap-1.5 flex-1 min-w-[140px] sm:min-w-[180px]">
         <Search className="w-4 h-4 text-neutral-400 shrink-0" />
         <input
           id="find-input"
@@ -97,17 +97,17 @@ export const FindReplaceBar: React.FC<FindReplaceBarProps> = ({
               else handleFindNext();
             }
           }}
-          className="w-full bg-neutral-100 dark:bg-neutral-700/60 border border-neutral-200 dark:border-neutral-600 rounded px-2.5 py-1 text-neutral-800 dark:text-neutral-100 placeholder-neutral-400 focus:outline-none focus:ring-1 focus:ring-blue-500"
+          className="w-full bg-neutral-100 dark:bg-neutral-700/60 border border-neutral-200 dark:border-neutral-600 rounded px-2.5 py-1 text-neutral-800 dark:text-neutral-100 placeholder-neutral-400 focus:outline-none focus:ring-1 focus:ring-blue-500 text-xs"
           autoFocus
         />
         {findText && (
-          <span className="text-xs text-neutral-400 whitespace-nowrap px-1">
-            {matchCount} {matchCount === 1 ? "resultado" : "resultados"}
+          <span className="text-[11px] text-neutral-400 whitespace-nowrap px-1">
+            {matchCount} {matchCount === 1 ? "res." : "res."}
           </span>
         )}
       </div>
 
-      <div className="flex items-center gap-1.5 flex-1 min-w-[200px]">
+      <div className="flex items-center gap-1.5 flex-1 min-w-[140px] sm:min-w-[180px]">
         <Replace className="w-4 h-4 text-neutral-400 shrink-0" />
         <input
           id="replace-input"
@@ -121,11 +121,11 @@ export const FindReplaceBar: React.FC<FindReplaceBarProps> = ({
               handleReplaceOne();
             }
           }}
-          className="w-full bg-neutral-100 dark:bg-neutral-700/60 border border-neutral-200 dark:border-neutral-600 rounded px-2.5 py-1 text-neutral-800 dark:text-neutral-100 placeholder-neutral-400 focus:outline-none focus:ring-1 focus:ring-blue-500"
+          className="w-full bg-neutral-100 dark:bg-neutral-700/60 border border-neutral-200 dark:border-neutral-600 rounded px-2.5 py-1 text-neutral-800 dark:text-neutral-100 placeholder-neutral-400 focus:outline-none focus:ring-1 focus:ring-blue-500 text-xs"
         />
       </div>
 
-      <div className="flex items-center gap-1">
+      <div className="flex items-center gap-1 flex-wrap sm:flex-nowrap shrink-0">
         <button
           id="match-case-toggle"
           type="button"

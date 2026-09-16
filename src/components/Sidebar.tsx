@@ -14,6 +14,8 @@ import {
   Calendar,
   Sparkles,
   FolderSync,
+  X,
+  FileText,
 } from "lucide-react";
 import { Note, NotesViewLayout, AdvancedSearchFilter } from "../types";
 import { AdvancedSearchPanel } from "./AdvancedSearchPanel";
@@ -383,23 +385,43 @@ export const Sidebar: React.FC<SidebarProps> = ({
 
       <aside
         id="app-sidebar"
-        className={`fixed md:static inset-y-0 left-0 z-40 w-72 md:w-68 lg:w-76 bg-neutral-50 dark:bg-neutral-925 border-r border-neutral-200 dark:border-neutral-800 flex flex-col transition-transform duration-200 ease-in-out ${
+        className={`fixed md:static inset-y-0 left-0 z-40 w-[86vw] max-w-sm sm:w-80 md:w-72 lg:w-80 xl:w-88 2xl:w-96 bg-neutral-50 dark:bg-neutral-925 border-r border-neutral-200 dark:border-neutral-800 flex flex-col transition-transform duration-200 ease-in-out shadow-2xl md:shadow-none ${
           isOpen ? "translate-x-0" : "-translate-x-full md:translate-x-0 md:flex"
         } ${!isOpen ? "md:hidden" : ""}`}
       >
+        {/* Mobile Header with dedicated Close Button */}
+        <div className="flex md:hidden items-center justify-between px-4 py-3 border-b border-neutral-200 dark:border-neutral-800 bg-white dark:bg-neutral-900 shrink-0">
+          <div className="flex items-center gap-2">
+            <FileText className="w-4 h-4 text-blue-600 dark:text-blue-400" />
+            <span className="font-bold text-sm text-neutral-900 dark:text-white">Minhas Anotações</span>
+            <span className="text-[11px] px-2 py-0.5 rounded-full bg-neutral-100 dark:bg-neutral-800 text-neutral-600 dark:text-neutral-400 font-medium">
+              {notes.length}
+            </span>
+          </div>
+          <button
+            id="close-mobile-sidebar-btn"
+            type="button"
+            onClick={onCloseMobile}
+            aria-label="Fechar gaveta de notas"
+            className="min-w-[36px] min-h-[36px] p-2 rounded-lg text-neutral-500 hover:text-neutral-800 dark:hover:text-neutral-200 hover:bg-neutral-100 dark:hover:bg-neutral-800 flex items-center justify-center transition-colors"
+          >
+            <X className="w-5 h-5" />
+          </button>
+        </div>
+
         {/* Top: Search & Action Buttons */}
-        <div className="p-3 border-b border-neutral-200/80 dark:border-neutral-800 space-y-2 shrink-0">
+        <div className="p-3 sm:p-3.5 border-b border-neutral-200/80 dark:border-neutral-800 space-y-2.5 shrink-0">
           {/* Main search bar with Advanced Search trigger */}
           <div className="flex items-center gap-1.5">
             <div className="relative flex-1">
-              <Search className="w-3.5 h-3.5 text-neutral-400 absolute left-2.5 top-2.5" />
+              <Search className="w-4 h-4 text-neutral-400 absolute left-2.5 top-3" />
               <input
                 id="sidebar-search-input"
                 type="text"
                 placeholder="Buscar no conteúdo..."
                 value={filters.query}
                 onChange={(e) => setFilters({ ...filters, query: e.target.value })}
-                className="w-full pl-8 pr-3 py-1.5 bg-white dark:bg-neutral-800 border border-neutral-200 dark:border-neutral-700 rounded-lg text-xs text-neutral-800 dark:text-neutral-200 placeholder-neutral-400 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                className="w-full pl-9 pr-3 py-2 bg-white dark:bg-neutral-800 border border-neutral-200 dark:border-neutral-700 rounded-lg text-xs sm:text-sm text-neutral-800 dark:text-neutral-200 placeholder-neutral-400 focus:outline-none focus:ring-1 focus:ring-blue-500"
               />
             </div>
 
@@ -408,7 +430,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
               type="button"
               onClick={() => setShowAdvancedSearch(!showAdvancedSearch)}
               title="Filtros avançados e busca por data"
-              className={`p-1.5 rounded-lg border transition-colors ${
+              className={`min-w-[38px] min-h-[38px] p-2 rounded-lg border transition-colors flex items-center justify-center shrink-0 ${
                 showAdvancedSearch || hasActiveFilters
                   ? "bg-blue-100 dark:bg-blue-900/60 border-blue-300 dark:border-blue-700 text-blue-600 dark:text-blue-300 font-semibold"
                   : "bg-white dark:bg-neutral-800 border-neutral-200 dark:border-neutral-700 text-neutral-500 hover:text-neutral-700 dark:hover:text-neutral-300"
@@ -419,23 +441,29 @@ export const Sidebar: React.FC<SidebarProps> = ({
           </div>
 
           {/* New Note & Upload Actions */}
-          <div className="flex gap-1.5">
+          <div className="flex gap-2">
             <button
               id="sidebar-new-note-action"
               type="button"
-              onClick={onCreateNote}
-              className="flex-1 py-1.5 px-3 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-xs font-semibold flex items-center justify-center gap-1.5 transition-colors shadow-2xs"
+              onClick={() => {
+                onCreateNote();
+                onCloseMobile();
+              }}
+              className="flex-1 min-h-[38px] py-2 px-3 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-xs sm:text-sm font-semibold flex items-center justify-center gap-1.5 transition-colors shadow-2xs"
             >
-              <Plus className="w-3.5 h-3.5" />
+              <Plus className="w-4 h-4" />
               Nova Nota
             </button>
 
             <button
               id="sidebar-import-file-btn"
               type="button"
-              onClick={onOpenImportModal}
+              onClick={() => {
+                onOpenImportModal();
+                onCloseMobile();
+              }}
               title="Abrir arquivo (.docx, .doc, .txt, .bat, .html, .rtf, .json, etc.)"
-              className="p-1.5 bg-white dark:bg-neutral-800 hover:bg-neutral-100 dark:hover:bg-neutral-700 border border-neutral-200 dark:border-neutral-700 text-neutral-700 dark:text-neutral-300 rounded-lg text-xs flex items-center justify-center transition-colors"
+              className="min-w-[38px] min-h-[38px] p-2 bg-white dark:bg-neutral-800 hover:bg-neutral-100 dark:hover:bg-neutral-700 border border-neutral-200 dark:border-neutral-700 text-neutral-700 dark:text-neutral-300 rounded-lg text-xs flex items-center justify-center transition-colors shrink-0"
             >
               <FileUp className="w-4 h-4" />
             </button>

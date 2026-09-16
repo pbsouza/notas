@@ -63,22 +63,22 @@ export const ExportModal: React.FC<ExportModalProps> = ({ note, isOpen, onClose 
   return (
     <div
       id="export-modal-backdrop"
-      className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-xs animate-in fade-in"
+      className="fixed inset-0 z-50 flex items-center justify-center p-2.5 sm:p-4 bg-black/50 backdrop-blur-xs animate-in fade-in"
       onClick={onClose}
     >
       <div
         id="export-modal"
-        className="bg-white dark:bg-neutral-900 border border-neutral-200 dark:border-neutral-800 rounded-2xl max-w-2xl w-full shadow-2xl overflow-hidden flex flex-col max-h-[90vh]"
+        className="bg-white dark:bg-neutral-900 border border-neutral-200 dark:border-neutral-800 rounded-2xl max-w-2xl w-full shadow-2xl overflow-hidden flex flex-col max-h-[92vh] sm:max-h-[90vh]"
         onClick={(e) => e.stopPropagation()}
       >
         {/* Modal Header */}
-        <div className="flex items-center justify-between px-6 py-4 border-b border-neutral-100 dark:border-neutral-800">
-          <div>
-            <h2 className="text-lg font-semibold text-neutral-900 dark:text-white flex items-center gap-2">
-              <Download className="w-5 h-5 text-blue-600 dark:text-blue-400" />
-              Salvar / Exportar Nota
+        <div className="flex items-center justify-between px-4 sm:px-6 py-3.5 sm:py-4 border-b border-neutral-100 dark:border-neutral-800">
+          <div className="min-w-0 pr-2">
+            <h2 className="text-base sm:text-lg font-semibold text-neutral-900 dark:text-white flex items-center gap-2 truncate">
+              <Download className="w-5 h-5 text-blue-600 dark:text-blue-400 shrink-0" />
+              <span>Salvar / Exportar Nota</span>
             </h2>
-            <p className="text-xs text-neutral-500 dark:text-neutral-400 mt-0.5">
+            <p className="text-xs text-neutral-500 dark:text-neutral-400 mt-0.5 truncate">
               Escolha o formato desejado para salvar ou baixar em seu dispositivo
             </p>
           </div>
@@ -86,14 +86,14 @@ export const ExportModal: React.FC<ExportModalProps> = ({ note, isOpen, onClose 
             id="close-export-modal"
             type="button"
             onClick={onClose}
-            className="p-2 text-neutral-400 hover:text-neutral-600 dark:hover:text-neutral-200 rounded-lg hover:bg-neutral-100 dark:hover:bg-neutral-800 transition-colors"
+            className="min-w-[36px] min-h-[36px] p-2 text-neutral-400 hover:text-neutral-600 dark:hover:text-neutral-200 rounded-lg hover:bg-neutral-100 dark:hover:bg-neutral-800 transition-colors flex items-center justify-center shrink-0"
           >
             <X className="w-5 h-5" />
           </button>
         </div>
 
         {/* Category Tabs */}
-        <div className="flex items-center gap-1.5 px-6 pt-3 pb-2 border-b border-neutral-100 dark:border-neutral-800 overflow-x-auto text-xs">
+        <div className="flex items-center gap-1.5 px-3 sm:px-6 pt-2.5 pb-2 border-b border-neutral-100 dark:border-neutral-800 overflow-x-auto no-scrollbar text-xs">
           {[
             { id: "todos", label: "Todos os Formatos" },
             { id: "documentos", label: "Documentos (PDF, Word)" },
@@ -106,7 +106,7 @@ export const ExportModal: React.FC<ExportModalProps> = ({ note, isOpen, onClose 
               id={`filter-category-${cat.id}`}
               type="button"
               onClick={() => setActiveCategory(cat.id)}
-              className={`px-3 py-1.5 rounded-full font-medium transition-colors whitespace-nowrap ${
+              className={`px-2.5 sm:px-3 py-1.5 rounded-full font-medium transition-colors whitespace-nowrap shrink-0 ${
                 activeCategory === cat.id
                   ? "bg-neutral-900 text-white dark:bg-neutral-100 dark:text-neutral-900"
                   : "bg-neutral-100 dark:bg-neutral-800 text-neutral-600 dark:text-neutral-300 hover:bg-neutral-200 dark:hover:bg-neutral-700"
@@ -118,7 +118,7 @@ export const ExportModal: React.FC<ExportModalProps> = ({ note, isOpen, onClose 
         </div>
 
         {/* Format Selection Grid */}
-        <div className="p-6 overflow-y-auto flex-1 grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+        <div className="p-3 sm:p-6 overflow-y-auto flex-1 grid grid-cols-1 sm:grid-cols-2 gap-2 sm:gap-2.5">
           {filteredFormats.map((fmt) => {
             const isSelected = selectedFormat === fmt.id;
             return (
@@ -164,7 +164,7 @@ export const ExportModal: React.FC<ExportModalProps> = ({ note, isOpen, onClose 
         </div>
 
         {/* Footer Actions */}
-        <div className="px-6 py-4 bg-neutral-50 dark:bg-neutral-800/60 border-t border-neutral-100 dark:border-neutral-800 flex flex-col sm:flex-row items-center justify-between gap-3">
+        <div className="px-4 sm:px-6 py-3 sm:py-4 bg-neutral-50 dark:bg-neutral-800/60 border-t border-neutral-100 dark:border-neutral-800 flex flex-col sm:flex-row items-center justify-between gap-2.5 sm:gap-3">
           <div className="flex items-center gap-2 text-xs text-neutral-500 dark:text-neutral-400 w-full sm:w-auto">
             <Sparkles className="w-4 h-4 text-amber-500 shrink-0" />
             <span className="truncate">
@@ -172,15 +172,15 @@ export const ExportModal: React.FC<ExportModalProps> = ({ note, isOpen, onClose 
             </span>
           </div>
 
-          <div className="flex items-center gap-2.5 w-full sm:w-auto justify-end">
+          <div className="flex items-center gap-2 w-full sm:w-auto justify-end">
             <button
               id="copy-note-content-btn"
               type="button"
               onClick={handleCopy}
-              className="px-3.5 py-2 text-xs font-medium text-neutral-700 dark:text-neutral-200 bg-white dark:bg-neutral-800 hover:bg-neutral-100 dark:hover:bg-neutral-700 border border-neutral-200 dark:border-neutral-700 rounded-xl flex items-center gap-1.5 transition-colors"
+              className="flex-1 sm:flex-none min-h-[38px] px-3.5 py-2 text-xs font-medium text-neutral-700 dark:text-neutral-200 bg-white dark:bg-neutral-800 hover:bg-neutral-100 dark:hover:bg-neutral-700 border border-neutral-200 dark:border-neutral-700 rounded-xl flex items-center justify-center gap-1.5 transition-colors"
             >
               {copied ? <Check className="w-3.5 h-3.5 text-green-500" /> : <Copy className="w-3.5 h-3.5" />}
-              {copied ? "Copiado!" : "Copiar Texto"}
+              <span>{copied ? "Copiado!" : "Copiar Texto"}</span>
             </button>
 
             <button
@@ -188,10 +188,10 @@ export const ExportModal: React.FC<ExportModalProps> = ({ note, isOpen, onClose 
               type="button"
               onClick={handleExport}
               disabled={isExporting}
-              className="px-5 py-2 text-xs font-semibold text-white bg-blue-600 hover:bg-blue-700 active:bg-blue-800 rounded-xl flex items-center gap-2 transition-all shadow-sm disabled:opacity-50"
+              className="flex-1 sm:flex-none min-h-[38px] px-4 sm:px-5 py-2 text-xs font-semibold text-white bg-blue-600 hover:bg-blue-700 active:bg-blue-800 rounded-xl flex items-center justify-center gap-2 transition-all shadow-sm disabled:opacity-50"
             >
               <Download className="w-3.5 h-3.5" />
-              {isExporting ? "Gerando..." : `Baixar .${currentOption.extension.toUpperCase()}`}
+              <span>{isExporting ? "Gerando..." : `Baixar .${currentOption.extension.toUpperCase()}`}</span>
             </button>
           </div>
         </div>

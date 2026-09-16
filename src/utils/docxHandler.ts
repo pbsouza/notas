@@ -11,6 +11,7 @@ import {
   WidthType,
   BorderStyle,
   AlignmentType,
+  PageBreak,
 } from "docx";
 
 /**
@@ -187,6 +188,21 @@ export function convertHtmlToDocxElements(html: string): (Paragraph | Table)[] {
     if (node.nodeType === Node.ELEMENT_NODE) {
       const elem = node as HTMLElement;
       const tag = elem.tagName.toLowerCase();
+
+      // Page Break
+      if (
+        elem.classList.contains("a4-page-break") ||
+        elem.classList.contains("docx-page-break") ||
+        elem.getAttribute("data-page-break") === "true" ||
+        tag === "hr"
+      ) {
+        docElements.push(
+          new Paragraph({
+            children: [new PageBreak()],
+          })
+        );
+        continue;
+      }
 
       // Heading 1
       if (tag === "h1") {
