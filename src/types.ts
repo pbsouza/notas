@@ -7,6 +7,8 @@ export interface Note {
   createdAt: number;
   updatedAt: number;
   version: number;
+  fontFamily?: string;
+  fontSize?: string;
 }
 
 export interface WorkspaceState {
@@ -73,7 +75,7 @@ export interface SyncMessage {
   timestamp: number;
 }
 
-export type EditorFont = 'mono' | 'sans' | 'serif';
+export type EditorFont = 'mono' | 'sans' | 'serif' | string;
 export type EditorTheme = 'default' | 'paper' | 'dark' | 'sepia' | 'terminal';
 export type NotesViewLayout = 'comfortable' | 'compact' | 'cards' | 'grid';
 export type EditorMode = 'rich' | 'plain';

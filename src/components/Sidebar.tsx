@@ -378,14 +378,14 @@ export const Sidebar: React.FC<SidebarProps> = ({
       {isOpen && (
         <div
           id="sidebar-mobile-backdrop"
-          className="fixed inset-0 bg-black/40 z-30 md:hidden"
+          className="fixed inset-0 bg-black/40 z-40 md:hidden"
           onClick={onCloseMobile}
         />
       )}
 
       <aside
         id="app-sidebar"
-        className={`fixed md:static inset-y-0 left-0 z-40 w-[86vw] max-w-sm sm:w-80 md:w-72 lg:w-80 xl:w-88 2xl:w-96 bg-neutral-50 dark:bg-neutral-925 border-r border-neutral-200 dark:border-neutral-800 flex flex-col transition-transform duration-200 ease-in-out shadow-2xl md:shadow-none ${
+        className={`fixed md:static inset-y-0 left-0 z-50 md:z-auto w-[86vw] max-w-sm sm:w-80 md:w-72 lg:w-80 xl:w-88 2xl:w-96 bg-neutral-50 dark:bg-neutral-925 border-r border-neutral-200 dark:border-neutral-800 flex flex-col transition-transform duration-200 ease-in-out shadow-2xl md:shadow-none ${
           isOpen ? "translate-x-0" : "-translate-x-full md:translate-x-0 md:flex"
         } ${!isOpen ? "md:hidden" : ""}`}
       >

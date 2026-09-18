@@ -314,7 +314,7 @@ export default function App() {
       {isWindowDragging && (
         <div
           id="window-drag-overlay"
-          className="fixed inset-0 z-50 bg-blue-600/90 backdrop-blur-xs flex flex-col items-center justify-center gap-3 text-white pointer-events-none p-6 text-center animate-fade-in"
+          className="fixed inset-0 z-[80] bg-blue-600/90 backdrop-blur-xs flex flex-col items-center justify-center gap-3 text-white pointer-events-none p-6 text-center animate-fade-in"
         >
           <div className="w-16 h-16 rounded-2xl bg-white/20 flex items-center justify-center">
             <svg

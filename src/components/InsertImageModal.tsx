@@ -75,7 +75,7 @@ export const InsertImageModal: React.FC<InsertImageModalProps> = ({
   return (
     <div
       id="insert-image-modal-backdrop"
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-xs p-4 animate-fade-in"
+      className="fixed inset-0 z-70 flex items-center justify-center bg-black/60 backdrop-blur-xs p-4 animate-fade-in"
       onClick={handleClose}
     >
       <div

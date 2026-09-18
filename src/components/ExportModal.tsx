@@ -1,5 +1,5 @@
 import React, { useState } from "react";
-import { X, Download, Copy, Check, FileText, Code, FileTerminal, Database, Sparkles } from "lucide-react";
+import { X, Download, Copy, Check, FileText, Code, FileTerminal, Database, Sparkles, Printer } from "lucide-react";
 import { Note, ExportFormatId } from "../types";
 import { EXPORT_FORMATS, exportNote } from "../utils/exportNotes";
 
@@ -10,7 +10,7 @@ interface ExportModalProps {
 }
 
 export const ExportModal: React.FC<ExportModalProps> = ({ note, isOpen, onClose }) => {
-  const [selectedFormat, setSelectedFormat] = useState<ExportFormatId>("txt");
+  const [selectedFormat, setSelectedFormat] = useState<ExportFormatId>("pdf");
   const [isExporting, setIsExporting] = useState(false);
   const [copied, setCopied] = useState(false);
   const [activeCategory, setActiveCategory] = useState<string>("todos");
@@ -63,7 +63,7 @@ export const ExportModal: React.FC<ExportModalProps> = ({ note, isOpen, onClose 
   return (
     <div
       id="export-modal-backdrop"
-      className="fixed inset-0 z-50 flex items-center justify-center p-2.5 sm:p-4 bg-black/50 backdrop-blur-xs animate-in fade-in"
+      className="fixed inset-0 z-70 flex items-center justify-center p-2.5 sm:p-4 bg-black/50 backdrop-blur-xs animate-in fade-in"
       onClick={onClose}
     >
       <div
@@ -163,6 +163,19 @@ export const ExportModal: React.FC<ExportModalProps> = ({ note, isOpen, onClose 
           })}
         </div>
 
+        {/* High Fidelity PDF Notice */}
+        {selectedFormat === "pdf" && (
+          <div className="mx-3 sm:mx-6 mb-2 p-3 bg-blue-50/80 dark:bg-blue-950/40 border border-blue-200/80 dark:border-blue-900/60 rounded-xl flex items-start gap-2.5 text-xs text-blue-900 dark:text-blue-200">
+            <Sparkles className="w-4 h-4 text-blue-600 dark:text-blue-400 shrink-0 mt-0.5" />
+            <div className="flex-1">
+              <p className="font-semibold">Salvamento em Alta Resolução A4</p>
+              <p className="text-blue-700 dark:text-blue-300/85 mt-0.5 leading-relaxed">
+                Renderiza o documento real com todas as fontes, cores, emojis (💾, 🚀, ⚡), tabelas, negritos e quebras de página fiéis à folha A4.
+              </p>
+            </div>
+          </div>
+        )}
+
         {/* Footer Actions */}
         <div className="px-4 sm:px-6 py-3 sm:py-4 bg-neutral-50 dark:bg-neutral-800/60 border-t border-neutral-100 dark:border-neutral-800 flex flex-col sm:flex-row items-center justify-between gap-2.5 sm:gap-3">
           <div className="flex items-center gap-2 text-xs text-neutral-500 dark:text-neutral-400 w-full sm:w-auto">
@@ -172,7 +185,23 @@ export const ExportModal: React.FC<ExportModalProps> = ({ note, isOpen, onClose 
             </span>
           </div>
 
-          <div className="flex items-center gap-2 w-full sm:w-auto justify-end">
+          <div className="flex items-center gap-2 w-full sm:w-auto justify-end flex-wrap sm:flex-nowrap">
+            {selectedFormat === "pdf" && (
+              <button
+                id="print-browser-btn"
+                type="button"
+                onClick={() => {
+                  onClose();
+                  setTimeout(() => window.print(), 150);
+                }}
+                className="flex-1 sm:flex-none min-h-[38px] px-3.5 py-2 text-xs font-medium text-neutral-700 dark:text-neutral-200 bg-white dark:bg-neutral-800 hover:bg-neutral-100 dark:hover:bg-neutral-700 border border-neutral-200 dark:border-neutral-700 rounded-xl flex items-center justify-center gap-1.5 transition-colors"
+                title="Imprimir diretamente pelo navegador ou salvar via diálogo de impressão nativo"
+              >
+                <Printer className="w-3.5 h-3.5 text-neutral-500" />
+                <span>Imprimir (Ctrl+P)</span>
+              </button>
+            )}
+
             <button
               id="copy-note-content-btn"
               type="button"
@@ -191,7 +220,7 @@ export const ExportModal: React.FC<ExportModalProps> = ({ note, isOpen, onClose 
               className="flex-1 sm:flex-none min-h-[38px] px-4 sm:px-5 py-2 text-xs font-semibold text-white bg-blue-600 hover:bg-blue-700 active:bg-blue-800 rounded-xl flex items-center justify-center gap-2 transition-all shadow-sm disabled:opacity-50"
             >
               <Download className="w-3.5 h-3.5" />
-              <span>{isExporting ? "Gerando..." : `Baixar .${currentOption.extension.toUpperCase()}`}</span>
+              <span>{isExporting ? "Gerando PDF..." : `Baixar .${currentOption.extension.toUpperCase()}`}</span>
             </button>
           </div>
         </div>

@@ -151,7 +151,7 @@ export const DeviceSyncModal: React.FC<DeviceSyncModalProps> = ({
   return (
     <div
       id="sync-modal-backdrop"
-      className="fixed inset-0 z-50 flex items-center justify-center p-2.5 sm:p-4 bg-black/50 backdrop-blur-xs animate-in fade-in"
+      className="fixed inset-0 z-70 flex items-center justify-center p-2.5 sm:p-4 bg-black/50 backdrop-blur-xs animate-in fade-in"
       onClick={onClose}
     >
       <div

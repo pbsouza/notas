@@ -46,6 +46,8 @@ import {
 import { Note, EditorFont, EditorTheme, EditorMode } from "../types";
 import { InsertTableModal } from "./InsertTableModal";
 import { InsertImageModal } from "./InsertImageModal";
+import { FontControls } from "./FontControls";
+import { FONT_OPTIONS, FONT_SIZES, FontOption } from "../data/fonts";
 
 interface RichEditorProps {
   note: Note | null;
@@ -54,6 +56,55 @@ interface RichEditorProps {
   theme: EditorTheme;
   remoteTypingDevice: string | null;
   onOpenExport: () => void;
+}
+
+// Check if a page container is effectively blank (no text, no tables, no images)
+export function isPageEffectivelyBlank(el: HTMLElement | null): boolean {
+  if (!el) return true;
+  if (el.querySelector("img, table, hr, iframe, video, audio, canvas, input[type='checkbox']")) {
+    return false;
+  }
+  const text = el.textContent || "";
+  const cleaned = text.replace(/[\s\u00A0\u200B\n\r\t]/g, "");
+  return cleaned.length === 0;
+}
+
+export function isHtmlEffectivelyBlank(html: string): boolean {
+  if (!html || html.trim() === "") return true;
+  if (/<(img|table|hr|iframe|video|audio|canvas|input)/i.test(html)) return false;
+  const stripped = html.replace(/<[^>]*>/g, "").replace(/[\s\u00A0\u200B\n\r\t]/g, "");
+  return stripped.length === 0;
+}
+
+// Calculate actual content height used by content inside an editable A4 page container
+export function getContentUsedHeight(el: HTMLElement | null): number {
+  if (!el) return 0;
+  if (isPageEffectivelyBlank(el)) return 0;
+
+  const containerRect = el.getBoundingClientRect();
+  if (containerRect.height === 0) return 0;
+
+  const children = Array.from(el.children) as HTMLElement[];
+  if (children.length === 0) {
+    try {
+      const range = document.createRange();
+      range.selectNodeContents(el);
+      const rect = range.getBoundingClientRect();
+      return Math.max(0, rect.bottom - containerRect.top);
+    } catch {
+      return 0;
+    }
+  }
+
+  let maxBottom = 0;
+  for (const child of children) {
+    const rect = child.getBoundingClientRect();
+    const bottomRel = rect.bottom - containerRect.top;
+    if (bottomRel > maxBottom) {
+      maxBottom = bottomRel;
+    }
+  }
+  return maxBottom;
 }
 
 // Helpers to preserve cursor position when content changes remotely
@@ -183,6 +234,46 @@ export const RichEditor: React.FC<RichEditorProps> = ({
   const [showHighlightPalette, setShowHighlightPalette] = useState(false);
   const [showHeadingDropdown, setShowHeadingDropdown] = useState(false);
 
+  // References for outside click handling on toolbar popups
+  const headingDropdownRef = useRef<HTMLDivElement>(null);
+  const colorPaletteRef = useRef<HTMLDivElement>(null);
+  const highlightPaletteRef = useRef<HTMLDivElement>(null);
+
+  // Close dropdowns on outside click
+  useEffect(() => {
+    const handleGlobalClick = (e: MouseEvent) => {
+      const target = e.target as Node;
+      if (headingDropdownRef.current && !headingDropdownRef.current.contains(target)) {
+        setShowHeadingDropdown(false);
+      }
+      if (colorPaletteRef.current && !colorPaletteRef.current.contains(target)) {
+        setShowColorPalette(false);
+      }
+      if (highlightPaletteRef.current && !highlightPaletteRef.current.contains(target)) {
+        setShowHighlightPalette(false);
+      }
+    };
+    document.addEventListener("mousedown", handleGlobalClick);
+    return () => document.removeEventListener("mousedown", handleGlobalClick);
+  }, []);
+
+  // Word-like font family and size state
+  const [activeFontFamily, setActiveFontFamily] = useState<string>(() => {
+    return note?.fontFamily || localStorage.getItem("bloco_font_family") || "Calibri";
+  });
+  const [activeFontSize, setActiveFontSize] = useState<string>(() => {
+    return note?.fontSize || localStorage.getItem("bloco_font_size") || "12";
+  });
+  const [documentBaseFont, setDocumentBaseFont] = useState<string>(() => {
+    const saved = note?.fontFamily || localStorage.getItem("bloco_font_family") || "Calibri";
+    const matched = FONT_OPTIONS.find(
+      (f) =>
+        f.name.toLowerCase() === saved.toLowerCase() ||
+        f.id.toLowerCase() === saved.toLowerCase()
+    );
+    return matched ? matched.fontFamily : "Calibri, Candara, 'Segoe UI', Arial, sans-serif";
+  });
+
   const [linkUrl, setLinkUrl] = useState("");
   const [linkText, setLinkText] = useState("");
 
@@ -233,12 +324,50 @@ export const RichEditor: React.FC<RichEditorProps> = ({
         alignRight: document.queryCommandState("justifyRight"),
         alignJustify: document.queryCommandState("justifyFull"),
       });
+
+      // Detect font family and font size at cursor position
+      const sel = window.getSelection();
+      if (sel && sel.anchorNode) {
+        const parentEl =
+          sel.anchorNode.nodeType === Node.ELEMENT_NODE
+            ? (sel.anchorNode as HTMLElement)
+            : sel.anchorNode.parentElement;
+        if (parentEl) {
+          const computed = window.getComputedStyle(parentEl);
+          const computedFontFamily = (computed.fontFamily || "").replace(/["']/g, "");
+          const matched = FONT_OPTIONS.find((f) => {
+            const cleanFont = f.fontFamily.replace(/["']/g, "").toLowerCase();
+            return (
+              computedFontFamily.toLowerCase().includes(f.name.toLowerCase()) ||
+              computedFontFamily.toLowerCase().includes(f.id.toLowerCase()) ||
+              cleanFont.includes(computedFontFamily.toLowerCase().split(",")[0].trim())
+            );
+          });
+          if (matched) {
+            setActiveFontFamily(matched.name);
+          }
+
+          const computedFontSize = computed.fontSize;
+          if (computedFontSize) {
+            const matchedSize = FONT_SIZES.find((s) => s.value === computedFontSize);
+            if (matchedSize) {
+              setActiveFontSize(matchedSize.label);
+            } else {
+              const px = parseFloat(computedFontSize);
+              if (!isNaN(px)) {
+                const pt = Math.round((px * 72) / 96);
+                setActiveFontSize(String(pt));
+              }
+            }
+          }
+        }
+      }
     } catch {
       // Ignored for non-supported nodes
     }
   }, [editorMode]);
 
-  // When note ID changes, re-split pages and reset active index
+  // When note ID changes, re-split pages and reset active index, sync fonts
   useEffect(() => {
     if (!note) return;
     const newPages = splitContentIntoPages(note.content || "");
@@ -247,13 +376,28 @@ export const RichEditor: React.FC<RichEditorProps> = ({
     lastEmittedHtmlRef.current = note.content || "";
     setActivePageIndex(0);
 
+    if (note.fontFamily) {
+      setActiveFontFamily(note.fontFamily);
+      const matched = FONT_OPTIONS.find(
+        (f) =>
+          f.name.toLowerCase() === note.fontFamily!.toLowerCase() ||
+          f.id.toLowerCase() === note.fontFamily!.toLowerCase()
+      );
+      if (matched) {
+        setDocumentBaseFont(matched.fontFamily);
+      }
+    }
+    if (note.fontSize) {
+      setActiveFontSize(note.fontSize);
+    }
+
     const timer = setTimeout(() => {
       newPages.forEach((_, idx) => {
         triggerAutoPaginationCheckRef.current?.(idx);
       });
     }, 150);
     return () => clearTimeout(timer);
-  }, [note?.id]);
+  }, [note?.id, note?.fontFamily, note?.fontSize]);
 
   // Sync note content from remote updates or external edits
   useEffect(() => {
@@ -286,7 +430,11 @@ export const RichEditor: React.FC<RichEditorProps> = ({
       pages.forEach((pgHtml, idx) => {
         const el = pageRefs.current[idx];
         if (el && el.innerHTML !== pgHtml) {
-          el.innerHTML = pgHtml;
+          const isFocused =
+            document.activeElement === el || (el && el.contains(document.activeElement));
+          if (!isFocused) {
+            el.innerHTML = pgHtml;
+          }
         }
       });
     } else if (pageViewMode === "fluid" && fluidEditableRef.current && note) {
@@ -303,196 +451,356 @@ export const RichEditor: React.FC<RichEditorProps> = ({
     return pageRefs.current[activePageIndex] || pageRefs.current[0] || null;
   }, [pageViewMode, activePageIndex]);
 
-  const checkAndHandlePageOverflow = useCallback(
-    (pageIndex: number, depth = 0) => {
-      if (depth > 20) {
-        isPaginatingRef.current = false;
-        return;
-      }
-      if (pageViewMode !== "page") return;
-
-      const el = pageRefs.current[pageIndex];
-      if (!el) return;
-
-      // Has content crossed the bottom margin of the page?
-      // el.clientHeight is the visible height of the printable body.
-      // A 2px threshold accounts for subpixel browser rounding.
-      const isOverflowing = el.scrollHeight > el.clientHeight + 2;
-      if (!isOverflowing) {
-        isPaginatingRef.current = false;
-        return;
-      }
-
+  const runAdaptivePagination = useCallback(
+    (startPageIndex: number) => {
+      if (pageViewMode !== "page" || isPaginatingRef.current) return;
       isPaginatingRef.current = true;
 
       try {
-        const containerRect = el.getBoundingClientRect();
-        const children = Array.from(el.childNodes) as (HTMLElement | Text)[];
-        if (children.length === 0) {
-          isPaginatingRef.current = false;
-          return;
-        }
+        let currentPages = [...pagesRef.current];
+        let didChange = false;
+        let iterations = 0;
+        const maxIterations = 20;
 
-        // Find the first child that extends past the container's bottom margin
-        let splitIndex = -1;
-        for (let i = 0; i < children.length; i++) {
-          const node = children[i];
-          if (node.nodeType === Node.ELEMENT_NODE) {
-            const rect = (node as HTMLElement).getBoundingClientRect();
-            if (rect.bottom > containerRect.bottom - 2) {
-              splitIndex = i;
-              break;
-            }
-          }
-        }
-
-        // Fallback: check offsetTop + offsetHeight against clientHeight
-        if (splitIndex === -1) {
-          for (let i = 0; i < children.length; i++) {
-            const node = children[i];
-            if (node.nodeType === Node.ELEMENT_NODE) {
-              const htmlEl = node as HTMLElement;
-              if (htmlEl.offsetTop + htmlEl.offsetHeight > el.clientHeight - 2) {
-                splitIndex = i;
-                break;
-              }
-            }
-          }
-        }
-
-        // If splitIndex wasn't found by coordinate, take the last element
-        if (splitIndex === -1) {
-          splitIndex = Math.max(0, children.length - 1);
-        }
-
-        let nodesToMove: Node[] = [];
-
-        // If splitIndex === 0 and there's only 1 child, split the content of that single child!
-        if (splitIndex === 0 && children.length === 1) {
-          const singleNode = children[0];
-          const text = singleNode.textContent || "";
-          const words = text.split(/\s+/);
-          if (words.length > 6) {
-            const tag =
-              singleNode.nodeType === Node.ELEMENT_NODE
-                ? (singleNode as HTMLElement).tagName.toLowerCase()
-                : "p";
-            const keepEl = document.createElement(tag);
-            const moveEl = document.createElement(tag);
-
-            const splitWordCount = Math.max(3, Math.floor(words.length * 0.65));
-            keepEl.textContent = words.slice(0, splitWordCount).join(" ");
-            moveEl.textContent = words.slice(splitWordCount).join(" ");
-
-            singleNode.parentNode?.replaceChild(keepEl, singleNode);
-            nodesToMove = [moveEl];
-          } else {
-            nodesToMove = [singleNode];
-          }
-        } else {
-          // If splitIndex === 0 but there are multiple children, keep at least child 0
-          if (splitIndex === 0 && children.length > 1) {
-            splitIndex = 1;
-          }
-          nodesToMove = children.slice(splitIndex);
-        }
-
-        if (nodesToMove.length === 0) {
-          isPaginatingRef.current = false;
-          return;
-        }
-
-        // Check if cursor was inside one of the moved nodes
+        // Save current selection info so we can restore cursor position if needed
         const sel = window.getSelection();
-        let wasCursorInMoved = false;
-        let savedOffset = 0;
-        if (sel && sel.rangeCount > 0) {
-          for (const mNode of nodesToMove) {
-            if (mNode.contains(sel.anchorNode)) {
-              wasCursorInMoved = true;
-              if (mNode.nodeType === Node.ELEMENT_NODE) {
-                savedOffset = getCaretCharacterOffsetWithin(mNode as HTMLElement);
-              }
+        let cursorInfo: { pageIndex: number; charOffset: number } | null = null;
+        if (sel && sel.rangeCount > 0 && sel.anchorNode) {
+          for (let p = 0; p < pageRefs.current.length; p++) {
+            const pageEl = pageRefs.current[p];
+            if (pageEl && pageEl.contains(sel.anchorNode)) {
+              cursorInfo = {
+                pageIndex: p,
+                charOffset: getCaretCharacterOffsetWithin(pageEl),
+              };
               break;
             }
           }
         }
 
-        // Extract HTML for overflowing content
-        const tempDiv = document.createElement("div");
-        nodesToMove.forEach((node) => {
-          tempDiv.appendChild(node.cloneNode(true));
-        });
-        const overflowHtml = tempDiv.innerHTML.trim();
+        let idx = Math.max(0, startPageIndex - 1);
 
-        // Remove the moved nodes from the current page element
-        nodesToMove.forEach((node) => {
-          if (node.parentNode) {
-            node.parentNode.removeChild(node);
+        while (idx < currentPages.length && iterations < maxIterations) {
+          iterations++;
+          const el = pageRefs.current[idx];
+          if (!el) {
+            idx++;
+            continue;
           }
-        });
 
-        const remainingHtml = el.innerHTML.trim() || "<p></p>";
-        const currentPages = [...pagesRef.current];
-        currentPages[pageIndex] = remainingHtml;
+          const containerRect = el.getBoundingClientRect();
+          const usedHeight = getContentUsedHeight(el);
+          const isOverflowing =
+            el.scrollHeight > el.clientHeight + 2 || usedHeight > el.clientHeight + 2;
 
-        const nextPageIndex = pageIndex + 1;
+          // 1. OVERFLOW CHECK: Content exceeds bottom of A4 printable sheet
+          if (isOverflowing) {
+            const containerBottom = containerRect.bottom - 4;
+            const children = Array.from(el.children) as HTMLElement[];
 
-        if (nextPageIndex < currentPages.length) {
-          // Next page exists: prepend overflowing content to next page!
-          const existingHtml = currentPages[nextPageIndex] || "";
-          const isExistingBlank =
-            !existingHtml ||
-            existingHtml.trim() === "" ||
-            existingHtml.trim() === "<p></p>" ||
-            existingHtml.trim() === "<p><br></p>";
+            if (children.length > 0) {
+              let splitIndex = -1;
+              for (let i = 0; i < children.length; i++) {
+                const childRect = children[i].getBoundingClientRect();
+                if (childRect.bottom > containerBottom) {
+                  splitIndex = i;
+                  break;
+                }
+              }
 
-          currentPages[nextPageIndex] = isExistingBlank
-            ? overflowHtml
-            : overflowHtml + existingHtml;
-        } else {
-          // Next page does NOT exist: AUTOMATICALLY CREATE IT!
-          currentPages.push(overflowHtml);
-        }
+              if (splitIndex === -1) {
+                splitIndex = Math.max(0, children.length - 1);
+              }
 
-        // Update pages state synchronously
-        pagesRef.current = currentPages;
-        setPages(currentPages);
+              let nodesToMove: HTMLElement[] = [];
+              const overflowChild = children[splitIndex];
 
-        const combined = joinPagesIntoContent(currentPages);
-        lastEmittedHtmlRef.current = combined;
-        onUpdateNote({ content: combined });
+              // Check if overflowChild can be partially split (e.g. text paragraph with words)
+              const overflowRect = overflowChild.getBoundingClientRect();
+              const isSplittableText =
+                (overflowChild.tagName.toLowerCase() === "p" ||
+                  overflowChild.tagName.toLowerCase() === "div" ||
+                  overflowChild.tagName.toLowerCase() === "blockquote") &&
+                !overflowChild.querySelector("img, table, hr, iframe, video");
 
-        // Switch active page to nextPageIndex
-        setActivePageIndex(nextPageIndex);
+              if (isSplittableText && overflowRect.top < containerBottom - 24) {
+                // The paragraph starts inside the page, but its bottom extends beyond the page.
+                // Split words so that words fitting remain, and remaining words move to next page!
+                const fullText = overflowChild.textContent || "";
+                const words = fullText.split(/\s+/).filter(Boolean);
 
-        // Seamlessly focus next page and restore cursor
-        setTimeout(() => {
-          const nextEl = pageRefs.current[nextPageIndex];
-          if (nextEl) {
-            nextEl.focus();
-            if (wasCursorInMoved && savedOffset > 0) {
-              setCaretPosition(nextEl, savedOffset);
-            } else {
-              const currentSel = window.getSelection();
-              if (currentSel) {
-                const range = document.createRange();
-                range.selectNodeContents(nextEl);
-                range.collapse(false);
-                currentSel.removeAllRanges();
-                currentSel.addRange(range);
+                if (words.length > 2) {
+                  // Binary search for maximum words that fit
+                  let low = 1;
+                  let high = words.length - 1;
+                  let bestWordCount = 0;
+                  const originalHtml = overflowChild.innerHTML;
+
+                  while (low <= high) {
+                    const mid = Math.floor((low + high) / 2);
+                    overflowChild.textContent = words.slice(0, mid).join(" ");
+                    const rectTest = overflowChild.getBoundingClientRect();
+                    if (rectTest.bottom <= containerBottom) {
+                      bestWordCount = mid;
+                      low = mid + 1;
+                    } else {
+                      high = mid - 1;
+                    }
+                  }
+
+                  if (bestWordCount > 0) {
+                    const keptWords = words.slice(0, bestWordCount).join(" ");
+                    const moveWords = words.slice(bestWordCount).join(" ");
+
+                    overflowChild.textContent = keptWords;
+
+                    const moveEl = document.createElement(overflowChild.tagName.toLowerCase());
+                    moveEl.textContent = moveWords;
+                    moveEl.setAttribute("data-split-flow", "true");
+
+                    const subsequent = children.slice(splitIndex + 1);
+                    nodesToMove = [moveEl, ...subsequent];
+                  } else {
+                    // Even 1 word doesn't fit on this page, restore and move entire child
+                    overflowChild.innerHTML = originalHtml;
+                    nodesToMove = children.slice(splitIndex);
+                  }
+                } else {
+                  nodesToMove = children.slice(splitIndex);
+                }
+              } else {
+                nodesToMove = children.slice(splitIndex);
+              }
+
+              if (nodesToMove.length > 0) {
+                const tempDiv = document.createElement("div");
+                nodesToMove.forEach((node) => {
+                  tempDiv.appendChild(node.cloneNode(true));
+                });
+                const overflowHtml = tempDiv.innerHTML.trim();
+
+                // Remove moved nodes from current page
+                nodesToMove.forEach((node) => {
+                  if (node !== overflowChild) {
+                    node.remove();
+                  }
+                });
+
+                currentPages[idx] = el.innerHTML.trim() || "<p></p>";
+                const nextPageIndex = idx + 1;
+
+                if (nextPageIndex < currentPages.length) {
+                  const existingHtml = currentPages[nextPageIndex] || "";
+                  const isExistingBlank = isHtmlEffectivelyBlank(existingHtml);
+                  currentPages[nextPageIndex] = isExistingBlank
+                    ? overflowHtml
+                    : overflowHtml + existingHtml;
+
+                  // Update next page DOM immediately
+                  const nextEl = pageRefs.current[nextPageIndex];
+                  if (nextEl) {
+                    nextEl.innerHTML = currentPages[nextPageIndex];
+                  }
+                } else {
+                  // Create new A4 sheet
+                  currentPages.push(overflowHtml);
+                }
+
+                didChange = true;
+                idx++;
+                continue;
               }
             }
-            nextEl.scrollIntoView({ behavior: "smooth", block: "nearest" });
           }
-          isPaginatingRef.current = false;
 
-          // Cascade check: does the next page also overflow?
-          checkAndHandlePageOverflow(nextPageIndex, depth + 1);
-        }, 60);
+          // 2. UNDERFLOW CHECK: Room available on page idx to pull content up from next page
+          const availableSpace = Math.max(0, el.clientHeight - usedHeight);
+          const nextPageIndex = idx + 1;
 
+          if (nextPageIndex < currentPages.length) {
+            const nextEl = pageRefs.current[nextPageIndex];
+            const nextIsBlank = !nextEl
+              ? isHtmlEffectivelyBlank(currentPages[nextPageIndex] || "")
+              : isPageEffectivelyBlank(nextEl);
+
+            if (nextIsBlank) {
+              // Dynamically prune empty next page
+              currentPages.splice(nextPageIndex, 1);
+              didChange = true;
+              continue;
+            } else if (availableSpace >= 28 && nextEl) {
+              const firstChild = nextEl.firstElementChild as HTMLElement | null;
+              if (firstChild) {
+                const childHeight = Math.max(
+                  firstChild.offsetHeight,
+                  firstChild.getBoundingClientRect().height
+                );
+
+                // Option A: The entire firstChild fits in availableSpace!
+                if (childHeight > 0 && childHeight + 6 <= availableSpace) {
+                  const isSplitFlow = firstChild.getAttribute("data-split-flow") === "true";
+                  const lastEl = el.lastElementChild as HTMLElement | null;
+
+                  if (
+                    isSplitFlow &&
+                    lastEl &&
+                    lastEl.tagName.toLowerCase() === "p" &&
+                    firstChild.tagName.toLowerCase() === "p"
+                  ) {
+                    // Merge cleanly back into original paragraph
+                    lastEl.innerHTML = (
+                      lastEl.innerHTML.trim() +
+                      " " +
+                      firstChild.innerHTML.trim()
+                    ).trim();
+                    firstChild.remove();
+                  } else {
+                    el.appendChild(firstChild);
+                  }
+
+                  currentPages[idx] = el.innerHTML.trim() || "<p></p>";
+
+                  if (isPageEffectivelyBlank(nextEl)) {
+                    currentPages.splice(nextPageIndex, 1);
+                  } else {
+                    currentPages[nextPageIndex] = nextEl.innerHTML.trim() || "<p></p>";
+                  }
+
+                  didChange = true;
+                  continue;
+                }
+
+                // Option B: firstChild is a paragraph that does not fit as a whole,
+                // but page idx has space for some of its words!
+                else if (
+                  availableSpace >= 28 &&
+                  (firstChild.tagName.toLowerCase() === "p" ||
+                    firstChild.tagName.toLowerCase() === "div") &&
+                  !firstChild.querySelector("img, table, hr")
+                ) {
+                  const rawText = (firstChild.textContent || "").trim();
+                  const words = rawText.split(/\s+/).filter(Boolean);
+
+                  if (words.length > 2) {
+                    const isSplitFlow = firstChild.getAttribute("data-split-flow") === "true";
+                    const lastEl = el.lastElementChild as HTMLElement | null;
+
+                    let targetContainer: HTMLElement | null = null;
+                    let initialHtml = "";
+                    let isNewContainer = false;
+
+                    if (
+                      isSplitFlow &&
+                      lastEl &&
+                      lastEl.tagName.toLowerCase() === "p"
+                    ) {
+                      targetContainer = lastEl;
+                      initialHtml = lastEl.innerHTML.trim();
+                    } else {
+                      targetContainer = document.createElement("p");
+                      targetContainer.setAttribute("data-split-flow", "true");
+                      el.appendChild(targetContainer);
+                      isNewContainer = true;
+                    }
+
+                    // Binary search how many words fit into page idx
+                    let low = 1;
+                    let high = words.length - 1;
+                    let bestCount = 0;
+
+                    while (low <= high) {
+                      const mid = Math.floor((low + high) / 2);
+                      const testWords = words.slice(0, mid).join(" ");
+                      if (isNewContainer) {
+                        targetContainer.textContent = testWords;
+                      } else {
+                        targetContainer.innerHTML = initialHtml + " " + testWords;
+                      }
+
+                      const used = getContentUsedHeight(el);
+                      if (used <= el.clientHeight - 6) {
+                        bestCount = mid;
+                        low = mid + 1;
+                      } else {
+                        high = mid - 1;
+                      }
+                    }
+
+                    if (bestCount > 0) {
+                      const pulledWords = words.slice(0, bestCount).join(" ");
+                      const remainingWords = words.slice(bestCount).join(" ");
+
+                      if (isNewContainer) {
+                        targetContainer.textContent = pulledWords;
+                      } else {
+                        targetContainer.innerHTML = (initialHtml + " " + pulledWords).trim();
+                      }
+
+                      firstChild.textContent = remainingWords;
+                      firstChild.setAttribute("data-split-flow", "true");
+
+                      currentPages[idx] = el.innerHTML.trim() || "<p></p>";
+                      currentPages[nextPageIndex] = nextEl.innerHTML.trim() || "<p></p>";
+
+                      didChange = true;
+                      continue;
+                    } else if (isNewContainer) {
+                      targetContainer.remove();
+                    }
+                  }
+                }
+              }
+            }
+          }
+
+          idx++;
+        }
+
+        // 3. PRUNE TRAILING EMPTY PAGES (Keep minimum 1 page)
+        while (currentPages.length > 1) {
+          const lastIdx = currentPages.length - 1;
+          const lastEl = pageRefs.current[lastIdx];
+          const isBlank = lastEl
+            ? isPageEffectivelyBlank(lastEl)
+            : isHtmlEffectivelyBlank(currentPages[lastIdx] || "");
+
+          if (isBlank) {
+            currentPages.pop();
+            didChange = true;
+          } else {
+            break;
+          }
+        }
+
+        if (didChange) {
+          pagesRef.current = currentPages;
+          setPages(currentPages);
+          const combined = joinPagesIntoContent(currentPages);
+          lastEmittedHtmlRef.current = combined;
+          onUpdateNote({ content: combined });
+          setActivePageIndex((prev) => Math.min(prev, currentPages.length - 1));
+
+          // Restore cursor if user was typing
+          if (cursorInfo) {
+            setTimeout(() => {
+              const targetPageIdx = Math.min(
+                cursorInfo!.pageIndex,
+                currentPages.length - 1
+              );
+              const targetEl = pageRefs.current[targetPageIdx];
+              if (
+                targetEl &&
+                (document.activeElement === targetEl ||
+                  targetEl.contains(document.activeElement))
+              ) {
+                setCaretPosition(targetEl, cursorInfo!.charOffset);
+              }
+            }, 30);
+          }
+        }
       } catch (err) {
-        console.error("Auto-pagination error:", err);
+        console.error("Adaptive pagination error:", err);
+      } finally {
         isPaginatingRef.current = false;
       }
     },
@@ -505,10 +813,10 @@ export const RichEditor: React.FC<RichEditorProps> = ({
         clearTimeout(paginationDebounceRef.current);
       }
       paginationDebounceRef.current = setTimeout(() => {
-        checkAndHandlePageOverflow(pageIndex);
-      }, 50);
+        runAdaptivePagination(pageIndex);
+      }, 45);
     },
-    [checkAndHandlePageOverflow]
+    [runAdaptivePagination]
   );
   triggerAutoPaginationCheckRef.current = triggerAutoPaginationCheck;
 
@@ -695,25 +1003,42 @@ export const RichEditor: React.FC<RichEditorProps> = ({
           (sel.anchorOffset === 0 || text === "");
 
         // If page is empty: delete page and focus previous
-        if ((text === "" || el.children.length === 0) && pages.length > 1) {
+        if ((text === "" || el.children.length === 0 || isPageEffectivelyBlank(el)) && pages.length > 1) {
           e.preventDefault();
           handleRemovePage(pageIndex);
           return;
         }
 
-        // If at the start of page, merge first child back into previous page if space allows
+        // If at the start of page, merge first child back into previous page
         if (isAtStart && prevEl) {
           const firstChild = el.firstElementChild as HTMLElement | null;
-          if (firstChild && prevEl.scrollHeight < prevEl.clientHeight - 20) {
+          if (firstChild) {
             e.preventDefault();
-            const movedHtml = firstChild.outerHTML;
-            firstChild.remove();
+            const lastChildOfPrev = prevEl.lastElementChild as HTMLElement | null;
+            let junctionCharOffset = 0;
+
+            if (
+              lastChildOfPrev &&
+              lastChildOfPrev.tagName.toLowerCase() === "p" &&
+              firstChild.tagName.toLowerCase() === "p"
+            ) {
+              junctionCharOffset = (lastChildOfPrev.textContent || "").length;
+              lastChildOfPrev.innerHTML = (
+                lastChildOfPrev.innerHTML.trim() +
+                " " +
+                firstChild.innerHTML.trim()
+              ).trim();
+              firstChild.remove();
+            } else {
+              prevEl.appendChild(firstChild);
+              junctionCharOffset = 0;
+            }
 
             const remainingHtml = el.innerHTML.trim() || "<p></p>";
             const currentPages = [...pagesRef.current];
-            currentPages[pageIndex - 1] = (currentPages[pageIndex - 1] || "") + movedHtml;
+            currentPages[pageIndex - 1] = prevEl.innerHTML.trim() || "<p></p>";
 
-            if (el.children.length === 0 || remainingHtml === "<p></p>") {
+            if (el.children.length === 0 || isPageEffectivelyBlank(el) || remainingHtml === "<p></p>") {
               currentPages.splice(pageIndex, 1);
               setActivePageIndex(pageIndex - 1);
             } else {
@@ -730,20 +1055,33 @@ export const RichEditor: React.FC<RichEditorProps> = ({
               const targetEl = pageRefs.current[pageIndex - 1];
               if (targetEl) {
                 targetEl.focus();
-                const range = document.createRange();
-                range.selectNodeContents(targetEl);
-                range.collapse(false);
-                const currentSel = window.getSelection();
-                if (currentSel) {
-                  currentSel.removeAllRanges();
-                  currentSel.addRange(range);
+                if (junctionCharOffset > 0) {
+                  setCaretPosition(targetEl, junctionCharOffset);
+                } else {
+                  const range = document.createRange();
+                  range.selectNodeContents(targetEl);
+                  range.collapse(false);
+                  const currentSel = window.getSelection();
+                  if (currentSel) {
+                    currentSel.removeAllRanges();
+                    currentSel.addRange(range);
+                  }
                 }
               }
+              triggerAutoPaginationCheck(pageIndex - 1);
             }, 50);
             return;
           }
         }
       }
+    }
+
+    // General Backspace and Delete keys: trigger auto-pagination check to pull content and delete empty pages dynamically
+    if (e.key === "Backspace" || e.key === "Delete") {
+      setTimeout(() => {
+        handlePageInput(pageIndex);
+        triggerAutoPaginationCheck(pageIndex);
+      }, 40);
     }
   };
 
@@ -758,6 +1096,91 @@ export const RichEditor: React.FC<RichEditorProps> = ({
       handlePageInput(activePageIndex);
     }
     updateActiveFormats();
+  };
+
+  // Word-like font family selection
+  const handleSelectFont = (fontOpt: FontOption) => {
+    const el = getActiveEditableEl();
+    if (!el) return;
+    el.focus();
+
+    const sel = window.getSelection();
+    const hasSelection = sel && !sel.isCollapsed && sel.toString().length > 0;
+
+    if (hasSelection) {
+      document.execCommand("fontName", false, fontOpt.fontFamily);
+    } else {
+      document.execCommand("fontName", false, fontOpt.fontFamily);
+      setDocumentBaseFont(fontOpt.fontFamily);
+      localStorage.setItem("bloco_font_family", fontOpt.fontFamily);
+    }
+
+    setActiveFontFamily(fontOpt.name);
+    onUpdateNote({ fontFamily: fontOpt.name });
+
+    if (pageViewMode === "fluid") {
+      handlePageInput(0);
+    } else {
+      handlePageInput(activePageIndex);
+    }
+    triggerAutoPaginationCheck(0);
+  };
+
+  // Word-like font size selection
+  const handleSelectFontSize = (sizeObj: { label: string; value: string; execSize: string }) => {
+    const el = getActiveEditableEl();
+    if (!el) return;
+    el.focus();
+
+    const sel = window.getSelection();
+    const hasSelection = sel && !sel.isCollapsed && sel.toString().length > 0;
+
+    if (hasSelection) {
+      document.execCommand("fontSize", false, sizeObj.execSize);
+      // Clean up browser font tag sizes to modern CSS font-size
+      const fontTags = el.querySelectorAll("font[size]");
+      fontTags.forEach((fTag) => {
+        const sizeVal = fTag.getAttribute("size");
+        const matched = FONT_SIZES.find((s) => s.execSize === sizeVal);
+        if (matched) {
+          (fTag as HTMLElement).removeAttribute("size");
+          (fTag as HTMLElement).style.fontSize = matched.value;
+        }
+      });
+    } else {
+      document.execCommand("fontSize", false, sizeObj.execSize);
+    }
+
+    setActiveFontSize(sizeObj.label);
+    onUpdateNote({ fontSize: sizeObj.label });
+    localStorage.setItem("bloco_font_size", sizeObj.label);
+
+    if (pageViewMode === "fluid") {
+      handlePageInput(0);
+    } else {
+      handlePageInput(activePageIndex);
+    }
+    triggerAutoPaginationCheck(0);
+  };
+
+  // Word-like increase / decrease font size
+  const handleStepFontSize = (direction: "up" | "down") => {
+    const currentIdx = FONT_SIZES.findIndex((s) => s.label === activeFontSize);
+    const validIdx = currentIdx !== -1 ? currentIdx : 3;
+    const nextIdx =
+      direction === "up"
+        ? Math.min(FONT_SIZES.length - 1, validIdx + 1)
+        : Math.max(0, validIdx - 1);
+    handleSelectFontSize(FONT_SIZES[nextIdx]);
+  };
+
+  // Set default document base font
+  const handleApplyBaseFontToDocument = (fontOpt: FontOption) => {
+    setDocumentBaseFont(fontOpt.fontFamily);
+    setActiveFontFamily(fontOpt.name);
+    localStorage.setItem("bloco_font_family", fontOpt.fontFamily);
+    onUpdateNote({ fontFamily: fontOpt.name });
+    triggerAutoPaginationCheck(0);
   };
 
   // Insert Table
@@ -1008,7 +1431,7 @@ export const RichEditor: React.FC<RichEditorProps> = ({
 
       {/* Top Document Header & Mode Controls */}
       <div
-        className={`px-3 sm:px-5 lg:px-6 2xl:px-8 py-2 sm:py-2.5 flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 sm:gap-3 ${themeClasses.titleInput} bg-white dark:bg-neutral-900 shrink-0 shadow-2xs`}
+        className={`relative z-20 px-3 sm:px-5 lg:px-6 2xl:px-8 py-2 sm:py-2.5 flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 sm:gap-3 ${themeClasses.titleInput} bg-white dark:bg-neutral-900 shrink-0 shadow-2xs`}
       >
         <div className="flex items-center gap-2.5 sm:gap-3 flex-1 min-w-0">
           <div className="w-7 h-7 sm:w-8 sm:h-8 rounded-lg bg-blue-50 dark:bg-blue-950/60 text-blue-600 dark:text-blue-400 flex items-center justify-center shrink-0 border border-blue-100 dark:border-blue-900/50">
@@ -1110,7 +1533,7 @@ export const RichEditor: React.FC<RichEditorProps> = ({
       {editorMode === "rich" && (
         <div
           id="modern-ribbon-toolbar"
-          className={`px-2.5 sm:px-4 lg:px-6 2xl:px-8 py-1.5 flex items-center overflow-x-auto no-scrollbar gap-1 text-xs select-none ${themeClasses.toolbar} border-b z-20 shrink-0`}
+          className={`relative z-20 px-2.5 sm:px-4 lg:px-6 2xl:px-8 py-1.5 flex items-center flex-wrap sm:flex-nowrap gap-1 text-xs select-none ${themeClasses.toolbar} border-b shrink-0 overflow-visible`}
         >
           {/* Group 1: Undo / Redo */}
           <div className="flex items-center gap-0.5 pr-1.5 border-r border-neutral-300 dark:border-neutral-700">
@@ -1132,8 +1555,24 @@ export const RichEditor: React.FC<RichEditorProps> = ({
             </button>
           </div>
 
-          {/* Group 2: Headings & Block Formats */}
-          <div className="relative flex items-center gap-0.5 px-1.5 border-r border-neutral-300 dark:border-neutral-700">
+          {/* Group 2: Word-like Font & Size Controls */}
+          <div className="flex items-center gap-1 px-1.5 border-r border-neutral-300 dark:border-neutral-700">
+            <FontControls
+              activeFontFamily={activeFontFamily}
+              activeFontSize={activeFontSize}
+              onSelectFont={handleSelectFont}
+              onSelectFontSize={handleSelectFontSize}
+              onStepFontSize={handleStepFontSize}
+              onApplyBaseFontToDocument={handleApplyBaseFontToDocument}
+              theme={theme}
+            />
+          </div>
+
+          {/* Group 3: Headings & Block Formats */}
+          <div
+            ref={headingDropdownRef}
+            className="relative flex items-center gap-0.5 px-1.5 border-r border-neutral-300 dark:border-neutral-700"
+          >
             <button
               type="button"
               onClick={() => setShowHeadingDropdown((prev) => !prev)}
@@ -1153,7 +1592,7 @@ export const RichEditor: React.FC<RichEditorProps> = ({
 
             {showHeadingDropdown && (
               <div
-                className="absolute top-full left-0 mt-1 bg-white dark:bg-neutral-900 border border-neutral-200 dark:border-neutral-800 rounded-xl shadow-xl p-1.5 z-30 min-w-[140px] space-y-0.5"
+                className="absolute top-full left-0 mt-1 bg-white dark:bg-neutral-900 border border-neutral-200 dark:border-neutral-800 rounded-xl shadow-2xl p-1.5 z-50 min-w-[150px] space-y-0.5"
                 onClick={() => setShowHeadingDropdown(false)}
               >
                 <button
@@ -1262,7 +1701,7 @@ export const RichEditor: React.FC<RichEditorProps> = ({
           {/* Group 4: Colors (Text Color & Highlight) */}
           <div className="relative flex items-center gap-0.5 px-1.5 border-r border-neutral-300 dark:border-neutral-700">
             {/* Text color button */}
-            <div className="relative">
+            <div className="relative" ref={colorPaletteRef}>
               <button
                 type="button"
                 onClick={() => {
@@ -1277,7 +1716,7 @@ export const RichEditor: React.FC<RichEditorProps> = ({
               </button>
 
               {showColorPalette && (
-                <div className="absolute top-full left-0 mt-1 bg-white dark:bg-neutral-900 border border-neutral-200 dark:border-neutral-800 rounded-xl shadow-xl p-2 z-30 grid grid-cols-4 gap-1.5 w-36">
+                <div className="absolute top-full left-0 mt-1 bg-white dark:bg-neutral-900 border border-neutral-200 dark:border-neutral-800 rounded-xl shadow-2xl p-2 z-50 grid grid-cols-4 gap-1.5 w-36">
                   {[
                     { label: "Padrão", color: "#111827" },
                     { label: "Azul", color: "#2563eb" },
@@ -1302,7 +1741,7 @@ export const RichEditor: React.FC<RichEditorProps> = ({
             </div>
 
             {/* Highlighter button */}
-            <div className="relative">
+            <div className="relative" ref={highlightPaletteRef}>
               <button
                 type="button"
                 onClick={() => {
@@ -1316,7 +1755,7 @@ export const RichEditor: React.FC<RichEditorProps> = ({
               </button>
 
               {showHighlightPalette && (
-                <div className="absolute top-full left-0 mt-1 bg-white dark:bg-neutral-900 border border-neutral-200 dark:border-neutral-800 rounded-xl shadow-xl p-2 z-30 grid grid-cols-4 gap-1.5 w-36">
+                <div className="absolute top-full left-0 mt-1 bg-white dark:bg-neutral-900 border border-neutral-200 dark:border-neutral-800 rounded-xl shadow-2xl p-2 z-50 grid grid-cols-4 gap-1.5 w-36">
                   {[
                     { label: "Sem realce", color: "transparent" },
                     { label: "Amarelo", color: "#fef08a" },
@@ -1491,7 +1930,7 @@ export const RichEditor: React.FC<RichEditorProps> = ({
 
       {/* Main Document Canvas Workspace */}
       <div
-        className={`flex-1 overflow-y-auto overflow-x-hidden ${themeClasses.workspace} p-2 sm:p-5 md:p-8 lg:p-10 2xl:p-12 flex justify-center`}
+        className={`relative z-10 flex-1 overflow-y-auto overflow-x-hidden ${themeClasses.workspace} p-2 sm:p-5 md:p-8 lg:p-10 2xl:p-12 flex justify-center`}
       >
         {editorMode === "rich" ? (
           pageViewMode === "page" ? (
@@ -1574,11 +2013,20 @@ export const RichEditor: React.FC<RichEditorProps> = ({
                       onMouseUp={updateActiveFormats}
                       onKeyDown={(e) => handlePageKeyDown(e, idx)}
                       onPaste={(e) => handlePagePaste(e, idx)}
+                      onCut={() => {
+                        setTimeout(() => {
+                          handlePageInput(idx);
+                          triggerAutoPaginationCheck(idx);
+                        }, 40);
+                      }}
                       data-placeholder={
                         idx === 0
                           ? "Comece a digitar seu texto aqui... Você pode colar ou abrir arquivos DOCX, formatar títulos, listas, tabelas e imagens."
                           : `Continue seu texto na Folha A4 #${idx + 1}...`
                       }
+                      style={{
+                        fontFamily: documentBaseFont,
+                      }}
                       className={`document-content flex-1 min-h-0 overflow-hidden outline-none focus:outline-none select-text ${fontClass} [&:empty]:before:content-[attr(data-placeholder)] [&:empty]:before:text-neutral-400 [&:empty]:before:pointer-events-none`}
                     />
 
@@ -1648,6 +2096,9 @@ export const RichEditor: React.FC<RichEditorProps> = ({
                   }
                 }}
                 data-placeholder="Comece a digitar seu texto aqui... Você pode colar ou abrir arquivos DOCX, formatar títulos, listas, tabelas e imagens."
+                style={{
+                  fontFamily: documentBaseFont,
+                }}
                 className={`document-content outline-none focus:outline-none min-h-[500px] select-text ${fontClass} [&:empty]:before:content-[attr(data-placeholder)] [&:empty]:before:text-neutral-400 [&:empty]:before:pointer-events-none`}
               />
             </div>

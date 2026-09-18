@@ -237,15 +237,30 @@
 @media print {
   body {
     background: white !important;
+    color: black !important;
+  }
+  #sidebar,
+  #modern-ribbon-toolbar,
+  #top-app-bar,
+  #export-modal-backdrop,
+  #export-modal,
+  #device-sync-modal,
+  #open-file-modal,
+  #find-bar,
+  .no-print,
+  button,
+  [role="dialog"] {
+    display: none !important;
   }
   .a4-page-sheet {
     box-shadow: none !important;
     border: none !important;
     margin: 0 !important;
+    padding: 20mm 20mm !important;
     page-break-after: always;
     break-after: page;
     height: auto !important;
-    min-height: 100vh !important;
+    min-height: 100% !important;
     max-height: none !important;
   }
   .a4-page-break,
